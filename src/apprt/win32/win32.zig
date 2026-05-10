@@ -145,9 +145,11 @@ pub const WM_EXITSIZEMOVE: u32 = 0x0232;
 pub const WM_KEYDOWN: u32 = 0x0100;
 pub const WM_KEYUP: u32 = 0x0101;
 pub const WM_CHAR: u32 = 0x0102;
+pub const WM_DEADCHAR: u32 = 0x0103;
 pub const WM_SYSKEYDOWN: u32 = 0x0104;
 pub const WM_SYSKEYUP: u32 = 0x0105;
 pub const WM_SYSCHAR: u32 = 0x0106;
+pub const WM_SYSDEADCHAR: u32 = 0x0107;
 pub const WM_MOUSEMOVE: u32 = 0x0200;
 pub const WM_LBUTTONDOWN: u32 = 0x0201;
 pub const WM_LBUTTONUP: u32 = 0x0202;
@@ -505,6 +507,9 @@ pub extern "user32" fn ToUnicode(
 pub extern "user32" fn GetKeyboardState(
     lpKeyState: *[256]u8,
 ) callconv(.winapi) i32;
+
+pub const MAPVK_VK_TO_CHAR: u32 = 2;
+pub extern "user32" fn MapVirtualKeyW(uCode: u32, uMapType: u32) callconv(.winapi) u32;
 
 pub extern "user32" fn SetCapture(
     hWnd: HWND,

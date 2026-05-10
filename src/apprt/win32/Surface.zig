@@ -79,6 +79,15 @@ ime_composing: bool = false,
 /// Unicode (VK_PACKET), or direct PostMessage.
 key_event_produced_text: bool = false,
 
+/// Set to true when a dead key (combining accent, e.g. `~`, `´` on ABNT2)
+/// WM_KEYDOWN is processed. TranslateMessage sets the thread dead-key state
+/// before DispatchMessage runs, so calling ToUnicode for the dead key itself
+/// would compose the dead key with itself and prematurely clear the state.
+/// Instead we skip ToUnicode for the dead key press and for the following
+/// key press, letting TranslateMessage deliver the composed character via
+/// WM_CHAR (which handleCharEvent then forwards to the terminal).
+dead_key_pending: bool = false,
+
 /// Whether the user is actively dragging a window border/titlebar.
 /// During live resize, handleResize blocks until the renderer draws
 /// one frame at the new size (or a timeout expires), eliminating the
@@ -1592,40 +1601,68 @@ pub fn handleKeyEvent(self: *Surface, wparam: usize, lparam: isize, action: inpu
     self.key_event_produced_text = false;
 
     if ((actual_action == .press or actual_action == .repeat) and !isModifierVk(vk)) {
-        var keyboard_state: [256]u8 = undefined;
-        if (w32.GetKeyboardState(&keyboard_state) != 0) {
-            // Mask to 8 bits — bit 24 of lparam is the extended-key flag,
-            // not part of the scancode. Including it produced wrong
-            // ToUnicode translations for AltGr layouts (German, Polish,
-            // etc.) and arrow/numpad keys. Matches the parallel call in
-            // sendWin32InputEvent below.
-            const scancode: u32 = @intCast((lparam >> 16) & 0xFF);
-            var utf16_buf: [4]u16 = undefined;
-            const result = w32.ToUnicode(
-                @intCast(vk),
-                scancode,
-                &keyboard_state,
-                &utf16_buf,
-                utf16_buf.len,
-                0,
-            );
-            if (result > 0) {
-                const utf16_slice = utf16_buf[0..@intCast(result)];
-                // Only use the text if it's a printable character.
-                // When Ctrl is held, ToUnicode returns control chars
-                // (0x01-0x1A) which would interfere with the core's
-                // Ctrl+key binding/encoding. Let the core handle
-                // modifier combos via key + mods fields instead.
-                const is_printable = utf16_slice[0] >= 0x20;
-                if (is_printable) {
-                    const len = std.unicode.utf16LeToUtf8(&utf8_buf, utf16_slice) catch 0;
-                    if (len > 0) {
-                        utf8_text = utf8_buf[0..len];
-                        // Shift was consumed to produce the text (e.g., Shift+a = 'A')
-                        if (mods.shift) consumed_mods.shift = true;
-                        // Flag that we produced text — the subsequent
-                        // WM_CHAR from TranslateMessage should be suppressed.
-                        self.key_event_produced_text = true;
+        // Dead key handling: the Win32 message loop runs TranslateMessage
+        // before DispatchMessage. For a dead key WM_KEYDOWN, TranslateMessage
+        // sets the thread dead-key state (e.g. `~` pending) and posts
+        // WM_DEADCHAR — all before our handleKeyEvent runs. If we then call
+        // ToUnicode, it sees that pending state and composes the dead key
+        // with itself (`~`+`~`=`~`), sends the wrong character, and clears
+        // the state so the next key (`a`) can no longer produce `ã`.
+        //
+        // Fix: use MapVirtualKeyW to detect dead-key VKs before calling
+        // ToUnicode. If the VK is a dead key, skip ToUnicode entirely and
+        // let TranslateMessage manage the composition. The composed result
+        // arrives via WM_CHAR → handleCharEvent.
+        const mapped = w32.MapVirtualKeyW(@intCast(vk), w32.MAPVK_VK_TO_CHAR);
+        if (mapped & 0x80000000 != 0) {
+            // This VK is a dead key (high bit set by MapVirtualKeyW).
+            // Record it and return — no output for the dead key itself.
+            self.dead_key_pending = true;
+            return;
+        }
+
+        if (self.dead_key_pending) {
+            // The previous key was a dead key. Skip ToUnicode here too:
+            // TranslateMessage already has the dead-key state and will post
+            // WM_CHAR with the composed character. key_event_produced_text
+            // stays false so that WM_CHAR is not suppressed.
+            self.dead_key_pending = false;
+        } else {
+            var keyboard_state: [256]u8 = undefined;
+            if (w32.GetKeyboardState(&keyboard_state) != 0) {
+                // Mask to 8 bits — bit 24 of lparam is the extended-key flag,
+                // not part of the scancode. Including it produced wrong
+                // ToUnicode translations for AltGr layouts (German, Polish,
+                // etc.) and arrow/numpad keys. Matches the parallel call in
+                // sendWin32InputEvent below.
+                const scancode: u32 = @intCast((lparam >> 16) & 0xFF);
+                var utf16_buf: [4]u16 = undefined;
+                const result = w32.ToUnicode(
+                    @intCast(vk),
+                    scancode,
+                    &keyboard_state,
+                    &utf16_buf,
+                    utf16_buf.len,
+                    0,
+                );
+                if (result > 0) {
+                    const utf16_slice = utf16_buf[0..@intCast(result)];
+                    // Only use the text if it's a printable character.
+                    // When Ctrl is held, ToUnicode returns control chars
+                    // (0x01-0x1A) which would interfere with the core's
+                    // Ctrl+key binding/encoding. Let the core handle
+                    // modifier combos via key + mods fields instead.
+                    const is_printable = utf16_slice[0] >= 0x20;
+                    if (is_printable) {
+                        const len = std.unicode.utf16LeToUtf8(&utf8_buf, utf16_slice) catch 0;
+                        if (len > 0) {
+                            utf8_text = utf8_buf[0..len];
+                            // Shift was consumed to produce the text (e.g., Shift+a = 'A')
+                            if (mods.shift) consumed_mods.shift = true;
+                            // Flag that we produced text — the subsequent
+                            // WM_CHAR from TranslateMessage should be suppressed.
+                            self.key_event_produced_text = true;
+                        }
                     }
                 }
             }
@@ -2085,9 +2122,12 @@ pub fn signalFrameDrawn(self: *Surface) void {
 /// Handle WM_SETFOCUS / WM_KILLFOCUS.
 pub fn handleFocus(self: *Surface, focused: bool) void {
     if (!self.core_surface_ready) return;
-    // Drop any buffered high surrogate on focus loss — otherwise it
-    // would pair with the next character key when focus returns.
-    if (!focused) self.high_surrogate = 0;
+    // Drop any buffered high surrogate and pending dead key on focus loss —
+    // otherwise they would combine with the next character when focus returns.
+    if (!focused) {
+        self.high_surrogate = 0;
+        self.dead_key_pending = false;
+    }
     self.core_surface.focusCallback(focused) catch |err| {
         log.err("focus callback error: {}", .{err});
     };

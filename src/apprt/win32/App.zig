@@ -1721,6 +1721,14 @@ fn surfaceWndProc(
             return 0;
         },
 
+        w32.WM_DEADCHAR, w32.WM_SYSDEADCHAR => {
+            // Dead key pressed (e.g. `~`, `´` on ABNT2). handleKeyEvent
+            // already detected the dead key via MapVirtualKeyW and set
+            // dead_key_pending; the composed character arrives later in
+            // WM_CHAR. Suppress this message explicitly.
+            return 0;
+        },
+
         w32.WM_CHAR => {
             // In Win32 Input Mode, the Unicode character is already
             // included in the WM_KEYDOWN event (Uc parameter). WM_CHAR
