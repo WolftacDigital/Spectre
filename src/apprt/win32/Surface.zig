@@ -80,12 +80,12 @@ ime_composing: bool = false,
 key_event_produced_text: bool = false,
 
 /// Set to true when a dead key (combining accent, e.g. `~`, `´` on ABNT2)
-/// WM_KEYDOWN is processed. TranslateMessage sets the thread dead-key state
-/// before DispatchMessage runs, so calling ToUnicode for the dead key itself
-/// would compose the dead key with itself and prematurely clear the state.
-/// Instead we skip ToUnicode for the dead key press and for the following
-/// key press, letting TranslateMessage deliver the composed character via
-/// WM_CHAR (which handleCharEvent then forwards to the terminal).
+/// WM_KEYDOWN is detected. Detection uses a double ToUnicode call: the first
+/// call may produce the wrong character (dead key self-composing due to
+/// TranslateMessage's pre-set state); the second call on the now-clean state
+/// returns -1 confirming the VK is a dead key AND correctly restores the
+/// pending dead-key state for TranslateMessage. On the next key press, ToUnicode
+/// is skipped and WM_CHAR delivers the composed character via handleCharEvent.
 dead_key_pending: bool = false,
 
 /// Whether the user is actively dragging a window border/titlebar.
@@ -1601,31 +1601,12 @@ pub fn handleKeyEvent(self: *Surface, wparam: usize, lparam: isize, action: inpu
     self.key_event_produced_text = false;
 
     if ((actual_action == .press or actual_action == .repeat) and !isModifierVk(vk)) {
-        // Dead key handling: the Win32 message loop runs TranslateMessage
-        // before DispatchMessage. For a dead key WM_KEYDOWN, TranslateMessage
-        // sets the thread dead-key state (e.g. `~` pending) and posts
-        // WM_DEADCHAR — all before our handleKeyEvent runs. If we then call
-        // ToUnicode, it sees that pending state and composes the dead key
-        // with itself (`~`+`~`=`~`), sends the wrong character, and clears
-        // the state so the next key (`a`) can no longer produce `ã`.
-        //
-        // Fix: use MapVirtualKeyW to detect dead-key VKs before calling
-        // ToUnicode. If the VK is a dead key, skip ToUnicode entirely and
-        // let TranslateMessage manage the composition. The composed result
-        // arrives via WM_CHAR → handleCharEvent.
-        const mapped = w32.MapVirtualKeyW(@intCast(vk), w32.MAPVK_VK_TO_CHAR);
-        if (mapped & 0x80000000 != 0) {
-            // This VK is a dead key (high bit set by MapVirtualKeyW).
-            // Record it and return — no output for the dead key itself.
-            self.dead_key_pending = true;
-            return;
-        }
-
         if (self.dead_key_pending) {
-            // The previous key was a dead key. Skip ToUnicode here too:
-            // TranslateMessage already has the dead-key state and will post
-            // WM_CHAR with the composed character. key_event_produced_text
-            // stays false so that WM_CHAR is not suppressed.
+            // The previous key was a dead key. Skip ToUnicode entirely:
+            // TranslateMessage already holds the pending dead-key state and
+            // will post WM_CHAR with the fully composed character (e.g. `ã`
+            // from `~`+`a`). key_event_produced_text stays false so WM_CHAR
+            // reaches handleCharEvent and is forwarded to the terminal.
             self.dead_key_pending = false;
         } else {
             var keyboard_state: [256]u8 = undefined;
@@ -1646,24 +1627,60 @@ pub fn handleKeyEvent(self: *Surface, wparam: usize, lparam: isize, action: inpu
                     0,
                 );
                 if (result > 0) {
-                    const utf16_slice = utf16_buf[0..@intCast(result)];
-                    // Only use the text if it's a printable character.
-                    // When Ctrl is held, ToUnicode returns control chars
-                    // (0x01-0x1A) which would interfere with the core's
-                    // Ctrl+key binding/encoding. Let the core handle
-                    // modifier combos via key + mods fields instead.
-                    const is_printable = utf16_slice[0] >= 0x20;
-                    if (is_printable) {
-                        const len = std.unicode.utf16LeToUtf8(&utf8_buf, utf16_slice) catch 0;
-                        if (len > 0) {
-                            utf8_text = utf8_buf[0..len];
-                            // Shift was consumed to produce the text (e.g., Shift+a = 'A')
-                            if (mods.shift) consumed_mods.shift = true;
-                            // Flag that we produced text — the subsequent
-                            // WM_CHAR from TranslateMessage should be suppressed.
-                            self.key_event_produced_text = true;
+                    // ToUnicode produced text. But the Win32 message loop runs
+                    // TranslateMessage before DispatchMessage, so for a dead key
+                    // WM_KEYDOWN, TranslateMessage already set the pending dead-key
+                    // state before we got here. Our ToUnicode call then composed the
+                    // dead key with itself (e.g. `~`+`~`=`~`) and cleared the state —
+                    // the wrong result.
+                    //
+                    // Detect this by calling ToUnicode a second time for the same VK.
+                    // After the first call consumed the TranslateMessage state, the
+                    // second call on a clean internal state will return -1 if and only
+                    // if this VK is actually a dead key. As a side-effect, that second
+                    // call correctly re-sets the dead-key state so that TranslateMessage
+                    // can use it when composing the next key via WM_CHAR.
+                    var probe_buf: [4]u16 = undefined;
+                    const probe = w32.ToUnicode(
+                        @intCast(vk),
+                        scancode,
+                        &keyboard_state,
+                        &probe_buf,
+                        probe_buf.len,
+                        0,
+                    );
+                    if (probe < 0) {
+                        // VK is a dead key. The first ToUnicode call gave the wrong
+                        // character due to TranslateMessage state interference.
+                        // The probe call restored the dead-key state correctly.
+                        // Let WM_CHAR deliver the composed result via handleCharEvent.
+                        self.dead_key_pending = true;
+                    } else {
+                        // Normal key — use the result from the first ToUnicode call.
+                        const utf16_slice = utf16_buf[0..@intCast(result)];
+                        // Only use the text if it's a printable character.
+                        // When Ctrl is held, ToUnicode returns control chars
+                        // (0x01-0x1A) which would interfere with the core's
+                        // Ctrl+key binding/encoding. Let the core handle
+                        // modifier combos via key + mods fields instead.
+                        const is_printable = utf16_slice[0] >= 0x20;
+                        if (is_printable) {
+                            const len = std.unicode.utf16LeToUtf8(&utf8_buf, utf16_slice) catch 0;
+                            if (len > 0) {
+                                utf8_text = utf8_buf[0..len];
+                                // Shift was consumed to produce the text (e.g., Shift+a = 'A')
+                                if (mods.shift) consumed_mods.shift = true;
+                                // Flag that we produced text — the subsequent
+                                // WM_CHAR from TranslateMessage should be suppressed.
+                                self.key_event_produced_text = true;
+                            }
                         }
                     }
+                } else if (result < 0) {
+                    // ToUnicode returned -1 directly: dead key with no prior
+                    // TranslateMessage interference. Track it and let WM_CHAR
+                    // deliver the composed result.
+                    self.dead_key_pending = true;
                 }
             }
         }
