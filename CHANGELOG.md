@@ -55,6 +55,20 @@ the underlying upstream commit when known.
   proxy a screen reader would otherwise see; once a proper IAccessible
   / UI Automation provider lands, it can be returned here via
   `LresultFromObject` instead.
+- Dead-key composition now works correctly on pt-BR ABNT2 and other
+  layouts with dead keys (`~`+`a` → `ã`, `´`+`e` → `é`, `^`+`o` →
+  `ô`). The root cause was `TranslateMessage` being called before
+  `DispatchMessage` for terminal surface windows: its internal
+  `ToUnicodeEx` mutated the thread's per-queue dead-key state before
+  `handleKeyEvent`'s own `ToUnicode` call, so dead keys composed with
+  themselves instead of the following character. The fix skips
+  `TranslateMessage` for surface windows (discriminated by class atom);
+  `ToUnicode` in `handleKeyEvent` is now the sole consumer of the
+  dead-key state. The same race in the Win32 Input Mode path (used by
+  PowerShell + PSReadLine) is fixed by the same change: `~`+`a` in a
+  PowerShell prompt now correctly produces `ã`. Edit controls (search
+  bar, command palette, tab rename) are unaffected and still receive
+  `TranslateMessage`.
 
 ## win-v1.0.1 — 2026-04-29
 
