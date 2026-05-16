@@ -300,7 +300,7 @@ pub fn run(self: *App) !void {
         const skip_translate = switch (msg.message) {
             w32.WM_KEYDOWN, w32.WM_KEYUP, w32.WM_SYSKEYDOWN, w32.WM_SYSKEYUP => blk: {
                 const h = msg.hwnd orelse break :blk false;
-                const atom: u16 = @intCast(w32.GetClassLongW(h, w32.GCW_ATOM) & 0xFFFF);
+                const atom: u16 = @truncate(w32.GetClassLongW(h, w32.GCW_ATOM));
                 break :blk atom != 0 and atom == self.terminal_class_atom;
             },
             else => false,
@@ -1722,16 +1722,12 @@ fn surfaceWndProc(
         },
 
         w32.WM_SYSCHAR => {
-            // TranslateMessage turns every WM_SYSKEYDOWN with a printable
-            // character (Alt+letter, Alt+symbol) into a follow-up
-            // WM_SYSCHAR. The keystroke itself was already handled in
-            // WM_SYSKEYDOWN above (keybindings fire there), so the
-            // WM_SYSCHAR has no further job for us — but if we forward it
-            // to DefWindowProc, the default handler treats it as an
-            // unmatched menu accelerator and rings MessageBeep. That's
-            // why splitting via Alt+- / Alt+\ etc. produced an audible
-            // ding even though the split itself fired correctly. Consume
-            // the message so the default beep never plays.
+            // TranslateMessage is skipped for terminal surface windows
+            // (see App.run), so WM_SYSCHAR is never posted by it for our
+            // windows. This handler guards against WM_SYSCHAR arriving via
+            // SendInput, PostMessage, or other injection paths: forwarding
+            // it to DefWindowProc would treat it as an unmatched menu
+            // accelerator and ring MessageBeep. Consume it unconditionally.
             return 0;
         },
 

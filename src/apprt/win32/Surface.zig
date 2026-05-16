@@ -71,12 +71,10 @@ mouse_button_mask: u3 = 0,
 /// text is extracted from WM_IME_COMPOSITION instead.
 ime_composing: bool = false,
 
-/// Set to true when handleKeyEvent produced text via ToUnicode. The
-/// subsequent WM_CHAR from TranslateMessage is then suppressed to avoid
-/// double input. Reset to false when WM_CHAR arrives (whether suppressed
-/// or processed). This allows WM_CHAR through for cases where
-/// handleKeyEvent did NOT produce text: IME (VK_PROCESSKEY), SendInput
-/// Unicode (VK_PACKET), or direct PostMessage.
+/// Set to true when handleKeyEvent produced text via ToUnicode. Any
+/// subsequent WM_CHAR (from IME, SendInput Unicode/VK_PACKET, or
+/// PostMessage) is then suppressed to avoid double input. Reset to false
+/// when WM_CHAR arrives (whether suppressed or processed).
 key_event_produced_text: bool = false,
 
 /// Whether the user is actively dragging a window border/titlebar.
@@ -1993,7 +1991,11 @@ fn sendWin32InputEvent(self: *Surface, vk: u16, lparam: isize, action: input.Act
             );
             if (result > 0) {
                 // Composed (or literal) char — possibly produced by
-                // combining with a previously-pending dead key.
+                // combining with a previously-pending dead key. Only the
+                // first UTF-16 code unit is captured; supplementary-plane
+                // compositions (result == 2, surrogate pair) are truncated
+                // to the high surrogate. This is a Win32 Input Mode protocol
+                // limitation: the Uc field is 16-bit.
                 unicode_char = utf16_buf[0];
             } else if (result < 0) {
                 // VK is a dead key. ToUnicode stored it in the queue's
@@ -2090,8 +2092,9 @@ pub fn handleFocus(self: *Surface, focused: bool) void {
         var ks: [256]u8 = undefined;
         if (w32.GetKeyboardState(&ks) != 0) {
             var buf: [4]u16 = undefined;
-            _ = w32.ToUnicode(@intCast(w32.VK_SPACE), 0, &ks, &buf, buf.len, 0);
-            _ = w32.ToUnicode(@intCast(w32.VK_SPACE), 0, &ks, &buf, buf.len, 0);
+            // 0x39 is the standard scancode for VK_SPACE on all layouts.
+            _ = w32.ToUnicode(@intCast(w32.VK_SPACE), 0x39, &ks, &buf, buf.len, 0);
+            _ = w32.ToUnicode(@intCast(w32.VK_SPACE), 0x39, &ks, &buf, buf.len, 0);
         }
     }
     self.core_surface.focusCallback(focused) catch |err| {

@@ -431,6 +431,8 @@ pub extern "user32" fn GetWindowLongPtrW(
     nIndex: i32,
 ) callconv(.winapi) isize;
 
+// Safe only for 16-bit GCW_* indices (e.g. GCW_ATOM). For pointer-sized
+// GCLP_* indices use GetClassLongPtrW.
 pub extern "user32" fn GetClassLongW(
     hWnd: HWND,
     nIndex: i32,
