@@ -1951,6 +1951,21 @@ fn surfaceWndProc(
                 surface.handlePaletteChange();
                 return 0;
             }
+            // Auto-dismiss popups when the Edit loses focus (click outside,
+            // Alt+Tab away). Matches standard popup UX (VS Code palette,
+            // macOS Spotlight). The dismiss helpers clear *_active first,
+            // so any re-entrant EN_KILLFOCUS during ShowWindow(SW_HIDE) /
+            // SetFocus falls through these guards as a no-op.
+            if (notification == w32.EN_KILLFOCUS) {
+                if (control_id == Surface.PALETTE_EDIT_ID and surface.palette_active) {
+                    surface.setCommandPaletteActive(false);
+                    return 0;
+                }
+                if (control_id == Surface.SEARCH_EDIT_ID and surface.search_active) {
+                    surface.setSearchActive(false, &[_:0]u8{});
+                    return 0;
+                }
+            }
             return w32.DefWindowProcW(hwnd, msg, wparam, lparam);
         },
 
