@@ -3,7 +3,11 @@
 All notable changes to the Ghostty Windows fork. Each release line includes
 the underlying upstream commit when known.
 
-## Unreleased
+## win-v1.1.0 — 2026-05-17
+
+Upstream sync (63 commits from `ghostty-org/ghostty` main, through
+`e90b7c9fa`) plus a batch of Win32 input/UX fixes that surfaced during
+parity testing against the macOS app.
 
 ### Added
 - Themed scrollbar replaces the native white `WS_VSCROLL`. Painted in the
@@ -83,6 +87,38 @@ the underlying upstream commit when known.
   format, so `Surface.encodeKey` now short-circuits whenever DEC mode
   9001 is active. Bindings still fire (binding lookup runs before
   `encodeKey`); modifier release tracking still works.
+- `toggle_background_opacity` state now propagates to newly created
+  windows. Toggling a window to opaque and then opening a new window
+  via `new_window` no longer drops the new window back to the
+  configured `background-opacity`. Mirrors macOS behavior from upstream
+  `#11583`.
+- Global keybindings now fire from inside the inline tab rename / search
+  bar / command palette Edit controls. Previously the Edit ate
+  Ctrl-modified keystrokes so e.g. `Ctrl+Shift+P` while renaming did
+  nothing; now those bubble up to the surface (the popup is dismissed
+  first, the action then runs). `Ctrl+A/C/V/X/Y/Z` without Shift still
+  stay with the Edit as text-editing shortcuts.
+- Inline tab rename now commits on focus loss (clicking on the
+  terminal, Alt+Tab, etc.) instead of silently reverting — matches
+  Win32 inline-edit convention used by Explorer file rename and the
+  Edge tab rename. `Enter` still commits explicitly, `Esc` cancels.
+- Inline tab rename Edit displays the real tab title cleanly. It was
+  showing trailing box glyphs because the Edit was given a pointer to
+  the raw 256-`u16` buffer and `CreateWindowExW` read uninitialized
+  memory past the title looking for a NUL terminator.
+- Clicking on the terminal now actually takes keyboard focus.
+  `WS_CHILD` surface windows don't auto-focus the way top-level
+  windows do, so without an explicit `SetFocus(hwnd)` on
+  `WM_LBUTTONDOWN`/`WM_RBUTTONDOWN`/`WM_MBUTTONDOWN` a sibling popup
+  edit (rename, palette, search) kept focus and the click did nothing
+  visible.
+- Command palette and search bar now auto-dismiss when their Edit
+  loses focus — clicking elsewhere in the terminal, switching to
+  another app via Alt+Tab. Matches popup UX in VS Code (command
+  palette) and Edge/Chrome (find bar). `Esc` still dismisses
+  explicitly. Clicking a palette item still executes it normally;
+  the popup doesn't take focus on click, so the Edit retains focus
+  through item selection.
 
 ## win-v1.0.1 — 2026-04-29
 
