@@ -1,6 +1,7 @@
-# DRAFT winget installer manifest. Portable zip install. Update
-# InstallerUrl/InstallerSha256 from package.ps1 output when the
-# release is publicly downloadable.
+# Winget installer manifest. Portable zip install. The release asset
+# is publicly downloadable (repo public as of 2026-06-09); submission
+# to microsoft/winget-pkgs is possible whenever desired. Keep
+# InstallerUrl/InstallerSha256 in sync with package.ps1 output.
 PackageIdentifier: WolftacDigital.Spectre
 PackageVersion: 0.1.0
 InstallerType: zip

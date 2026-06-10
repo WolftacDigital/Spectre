@@ -3,7 +3,7 @@
     "description": "Spectre — a fast, native Windows terminal built on Ghostty's core",
     "homepage": "https://github.com/WolftacDigital/Spectre",
     "license": "MIT",
-    "##": "DRAFT: requires the repo (or at least its releases) to be public before scoop can fetch the asset. Update url + hash from dist-out/spectre-<ver>-x64.zip.sha256 when publishing.",
+    "##": "Repo is public as of 2026-06-09; this manifest is live. Install: scoop install <path-or-raw-url-to-this-file>. Keep url + hash in sync with dist-out/spectre-<ver>-x64.zip.sha256 on each release.",
     "url": "https://github.com/WolftacDigital/Spectre/releases/download/v0.1.0/spectre-0.1.0-x64.zip",
     "hash": "2CEEAF9E95A8495DC0071600C1970764A1D90AE7B19F52AB1DE286A9C78BD9A4",
     "bin": "bin\\spectre.exe",
