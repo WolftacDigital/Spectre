@@ -29,10 +29,14 @@ echo "Copying exe to local path to avoid security prompts..."
 # when several tests are run back-to-back.
 powershell.exe -ExecutionPolicy Bypass -Command "Get-Process ghostty-test -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue" 2>/dev/null || true
 sleep 0.3
+# Spectre: the Windows artifact is spectre.exe; fall back to the old
+# ghostty.exe name so the runner still works on pre-rename checkouts.
+SRC_EXE="$REPO_DIR/zig-out/bin/spectre.exe"
+[ -f "$SRC_EXE" ] || SRC_EXE="$REPO_DIR/zig-out/bin/ghostty.exe"
 # Retry the copy once if it fails (Windows file locking can be transient).
-cp "$REPO_DIR/zig-out/bin/ghostty.exe" "$(wslpath "$WIN_TEMP")/ghostty-test.exe" 2>/dev/null || {
+cp "$SRC_EXE" "$(wslpath "$WIN_TEMP")/ghostty-test.exe" 2>/dev/null || {
     sleep 0.5
-    cp "$REPO_DIR/zig-out/bin/ghostty.exe" "$(wslpath "$WIN_TEMP")/ghostty-test.exe"
+    cp "$SRC_EXE" "$(wslpath "$WIN_TEMP")/ghostty-test.exe"
 }
 GHOSTTY_EXE="$LOCAL_EXE"
 

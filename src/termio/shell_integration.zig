@@ -937,20 +937,137 @@ fn setupPowershell(
         try cmd.appendArg(exe);
     } else return null;
 
-    // Add -NoExit so PowerShell stays interactive after sourcing.
-    try cmd.appendArg("-NoExit");
+    // PowerShell parameters must precede -Command: everything after
+    // -Command on the command line is treated as the command and its
+    // arguments, not as PowerShell parameters. So the user's arguments
+    // are passed through FIRST and our dot-source is injected LAST.
+    //
+    // If the user supplied their own -Command or -File (or the
+    // documented single-letter aliases), there is no way to also
+    // inject ours -- skip integration rather than corrupt their
+    // invocation.
+    var has_noexit = false;
+    while (iter.next()) |arg| {
+        if (std.ascii.eqlIgnoreCase(arg, "-command") or
+            std.ascii.eqlIgnoreCase(arg, "-c") or
+            std.ascii.eqlIgnoreCase(arg, "-file") or
+            std.ascii.eqlIgnoreCase(arg, "-f"))
+        {
+            return null;
+        }
+        if (std.ascii.eqlIgnoreCase(arg, "-noexit")) has_noexit = true;
+        try cmd.appendArg(arg);
+    }
+
+    // Add -NoExit so PowerShell stays interactive after sourcing
+    // (unless the user already passed it; duplicating the parameter
+    // is an error in PowerShell).
+    if (!has_noexit) try cmd.appendArg("-NoExit");
 
     // Dot-source our integration script.
     const source_cmd = try std.fmt.allocPrint(alloc, ". '{s}'", .{script_path});
     try cmd.appendArg("-Command");
     try cmd.appendArg(source_cmd);
 
-    // Pass through remaining arguments.
-    while (iter.next()) |arg| {
-        try cmd.appendArg(arg);
-    }
-
     return .{ .shell = try alloc.dupeZ(u8, try cmd.toOwnedSlice()) };
+}
+
+test "powershell: integration injected for plain shell" {
+    const testing = std.testing;
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var res: TmpResourcesDir = try .init(alloc, .powershell);
+    defer res.deinit();
+
+    var env = EnvMap.init(alloc);
+    defer env.deinit();
+
+    const command = try setupPowershell(alloc, .{ .shell = "pwsh" }, res.path, &env);
+    const s = command.?.shell;
+    try testing.expect(std.mem.startsWith(u8, s, "pwsh -NoExit -Command . '"));
+    try testing.expect(std.mem.endsWith(u8, s, "ghostty-shell-integration.ps1'"));
+}
+
+test "powershell: user args precede injected -Command" {
+    const testing = std.testing;
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var res: TmpResourcesDir = try .init(alloc, .powershell);
+    defer res.deinit();
+
+    var env = EnvMap.init(alloc);
+    defer env.deinit();
+
+    const command = try setupPowershell(
+        alloc,
+        .{ .shell = "pwsh -NoLogo -NoProfile" },
+        res.path,
+        &env,
+    );
+    const s = command.?.shell;
+    // PowerShell only honors parameters that appear before -Command,
+    // so the user's flags must come first.
+    try testing.expect(std.mem.startsWith(
+        u8,
+        s,
+        "pwsh -NoLogo -NoProfile -NoExit -Command . '",
+    ));
+}
+
+test "powershell: user -NoExit is not duplicated" {
+    const testing = std.testing;
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var res: TmpResourcesDir = try .init(alloc, .powershell);
+    defer res.deinit();
+
+    var env = EnvMap.init(alloc);
+    defer env.deinit();
+
+    const command = try setupPowershell(
+        alloc,
+        .{ .shell = "pwsh -NoExit" },
+        res.path,
+        &env,
+    );
+    const s = command.?.shell;
+    try testing.expect(std.mem.startsWith(u8, s, "pwsh -NoExit -Command . '"));
+    try testing.expectEqual(
+        @as(usize, 1),
+        std.mem.count(u8, s, "-NoExit"),
+    );
+}
+
+test "powershell: user -Command or -File skips integration" {
+    const testing = std.testing;
+    var arena = ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var res: TmpResourcesDir = try .init(alloc, .powershell);
+    defer res.deinit();
+
+    var env = EnvMap.init(alloc);
+    defer env.deinit();
+
+    const cmdlines = [_][:0]const u8{
+        "pwsh -File a.ps1",
+        "pwsh -f a.ps1",
+        "pwsh -Command Get-Date",
+        "pwsh -c Get-Date",
+        "pwsh -NoProfile -NoExit -File a.ps1",
+    };
+    for (cmdlines) |cmdline| {
+        try testing.expect(
+            try setupPowershell(alloc, .{ .shell = cmdline }, res.path, &env) == null,
+        );
+    }
 }
 
 /// Setup the zsh automatic shell integration. This works by setting
