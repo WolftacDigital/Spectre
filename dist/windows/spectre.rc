@@ -23,8 +23,8 @@ ID_ICON_SPECTRE ICON "spectre.ico"
 // resource compiler does not include it.)
 #define VS_VERSION_INFO 1
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION    0,1,0,0
-PRODUCTVERSION 0,1,0,0
+FILEVERSION    0,1,1,0
+PRODUCTVERSION 0,1,1,0
 FILEFLAGSMASK  0x3F
 FILEFLAGS      0x0
 FILEOS         0x40004 // VOS_NT_WINDOWS32
@@ -38,12 +38,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "Wolftac Digital"
             VALUE "FileDescription",  "Spectre terminal emulator"
-            VALUE "FileVersion",      "0.1.0.0"
+            VALUE "FileVersion",      "0.1.1.0"
             VALUE "InternalName",     "spectre"
             VALUE "LegalCopyright",   "Original work copyright Mitchell Hashimoto (Ghostty). Windows port additions copyright Shiwei Song (ghostty-windows). Spectre additions copyright Wolftac Digital. MIT License."
             VALUE "OriginalFilename", "spectre.exe"
             VALUE "ProductName",      "Spectre"
-            VALUE "ProductVersion",   "0.1.0.0"
+            VALUE "ProductVersion",   "0.1.1.0"
         END
     END
     BLOCK "VarFileInfo"
