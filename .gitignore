@@ -36,3 +36,8 @@ dist/windows/ghostty-windows-x64-*.zip
 
 # Zig 0.16+ package cache (lands here when build deps resolve outside .zig-cache)
 zig-pkg/
+
+# Spectre local artifacts
+/dist-out/
+/spectre-*.png
+/dist/windows/spectre-icon-preview.png
