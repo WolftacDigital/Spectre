@@ -11,6 +11,6 @@ NestedInstallerFiles:
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/WolftacDigital/Spectre/releases/download/v0.1.0/spectre-0.1.0-x64.zip
-    InstallerSha256: 9AC205F89FF730A69A3405C2F94ED45EAF1DAA30CD2B5AD53B5BED331BDE7EB6
+    InstallerSha256: 2CEEAF9E95A8495DC0071600C1970764A1D90AE7B19F52AB1DE286A9C78BD9A4
 ManifestType: installer
 ManifestVersion: 1.6.0

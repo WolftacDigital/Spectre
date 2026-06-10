@@ -11,8 +11,10 @@ $ErrorActionPreference = 'Stop'
 $exe = Join-Path $Source 'bin\spectre.exe'
 if (-not (Test-Path $exe)) { throw "bin\spectre.exe not found under $Source" }
 
-# Copy payload (skip if installing in place)
-if ((Resolve-Path $Source).Path -ne (Resolve-Path -ErrorAction SilentlyContinue $Dest)?.Path) {
+# Copy payload (skip if installing in place). Windows PowerShell 5.1
+# compatible - no null-conditional operator.
+$resolvedDest = if (Test-Path $Dest) { (Resolve-Path $Dest).Path } else { $null }
+if ((Resolve-Path $Source).Path -ne $resolvedDest) {
     New-Item -ItemType Directory -Force $Dest | Out-Null
     Copy-Item "$Source\bin" $Dest -Recurse -Force
     Copy-Item "$Source\share" $Dest -Recurse -Force

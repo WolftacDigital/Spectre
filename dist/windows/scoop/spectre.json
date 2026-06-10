@@ -5,7 +5,7 @@
     "license": "MIT",
     "##": "DRAFT: requires the repo (or at least its releases) to be public before scoop can fetch the asset. Update url + hash from dist-out/spectre-<ver>-x64.zip.sha256 when publishing.",
     "url": "https://github.com/WolftacDigital/Spectre/releases/download/v0.1.0/spectre-0.1.0-x64.zip",
-    "hash": "9AC205F89FF730A69A3405C2F94ED45EAF1DAA30CD2B5AD53B5BED331BDE7EB6",
+    "hash": "2CEEAF9E95A8495DC0071600C1970764A1D90AE7B19F52AB1DE286A9C78BD9A4",
     "bin": "bin\\spectre.exe",
     "shortcuts": [
         [
