@@ -1,4 +1,4 @@
-# Generates spectre.ico — a dark rounded square with a lavender prompt
+﻿# Generates spectre.ico - a dark rounded square with a lavender prompt
 # chevron and a mauve cursor block. Pure GDI+, no external tooling.
 # Run: powershell -ExecutionPolicy Bypass -File make-icon.ps1
 param([string]$OutPath = (Join-Path $PSScriptRoot 'spectre.ico'))

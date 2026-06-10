@@ -1,0 +1,16 @@
+# DRAFT winget installer manifest. Portable zip install. Update
+# InstallerUrl/InstallerSha256 from package.ps1 output when the
+# release is publicly downloadable.
+PackageIdentifier: WolftacDigital.Spectre
+PackageVersion: 0.1.0
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: bin\spectre.exe
+    PortableCommandAlias: spectre
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/WolftacDigital/Spectre/releases/download/v0.1.0/spectre-0.1.0-x64.zip
+    InstallerSha256: 9AC205F89FF730A69A3405C2F94ED45EAF1DAA30CD2B5AD53B5BED331BDE7EB6
+ManifestType: installer
+ManifestVersion: 1.6.0

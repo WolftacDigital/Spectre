@@ -1,0 +1,20 @@
+# DRAFT winget default-locale manifest.
+PackageIdentifier: WolftacDigital.Spectre
+PackageVersion: 0.1.0
+PackageLocale: en-US
+Publisher: Wolftac Digital
+PackageName: Spectre
+License: MIT
+ShortDescription: A fast, native Windows terminal built on Ghostty's core.
+Description: >-
+  Spectre is a native Win32 terminal emulator built on the Ghostty
+  terminal core (VT emulation, GPU rendering, themes, config system),
+  forked from InsipidPoint/ghostty-windows. ConPTY-based, with tabs,
+  splits, a quick terminal, and Ghostty config compatibility.
+Moniker: spectre
+Tags:
+  - terminal
+  - console
+  - ghostty
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

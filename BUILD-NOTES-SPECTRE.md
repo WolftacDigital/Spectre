@@ -17,7 +17,36 @@ cd D:\Wolftac\Spectre
 zig build -Dapp-runtime=win32 -Dtarget=x86_64-windows-gnu
 ```
 
-Output: `zig-out\bin\ghostty.exe` (+ `ghostty-vt.dll`).
+Output: `zig-out\bin\spectre.exe` (+ `ghostty-vt.dll`). (Windows builds
+are branded Spectre as of Phase 2; non-Windows targets keep the
+upstream `ghostty` name.)
+
+## Release packaging
+
+```powershell
+zig build -Dapp-runtime=win32 -Dtarget=x86_64-windows-gnu -Doptimize=ReleaseFast
+powershell -ExecutionPolicy Bypass -File dist\windows\package.ps1 -Version 0.1.0
+```
+
+Produces `dist-out\spectre-<ver>-x64.zip` (+ `.sha256`) containing
+`bin\spectre.exe`, `share\` resources (themes, shell integration), an
+`install.ps1` (Start Menu shortcut + user PATH), and a README. Upload
+to a GitHub release with `gh release create`. Scoop/winget manifest
+drafts live in `dist\windows\scoop\` and `dist\windows\winget\` —
+they need the release assets to be publicly downloadable, so they
+stay drafts while the repo is private. Binaries are unsigned;
+SmartScreen will warn on downloaded copies (documented in the zip's
+README).
+
+## Config paths (Spectre)
+
+`%LOCALAPPDATA%\spectre\config` wins when present; the Ghostty paths
+(`%LOCALAPPDATA%\ghostty\config.ghostty`, then `…\ghostty\config`)
+remain as compatibility fallbacks. New config templates are created in
+the Spectre location. Theme names are display names with capitals and
+spaces (`theme = Catppuccin Mocha`); list with `spectre +list-themes`.
+Custom user themes still live in `%LOCALAPPDATA%\ghostty\themes`
+(deliberately unchanged for now).
 
 ## Deviations from the upstream README, and why
 
