@@ -469,7 +469,7 @@ pub fn close(self: *Surface, process_active: bool) void {
             std.unicode.utf8ToUtf16LeStringLiteral(
                 "A process is still running in this terminal.\nClose anyway?",
             ),
-            std.unicode.utf8ToUtf16LeStringLiteral("Ghostty"),
+            std.unicode.utf8ToUtf16LeStringLiteral("Spectre"),
             w32.MB_OKCANCEL | w32.MB_ICONWARNING | w32.MB_DEFBUTTON2,
         );
         if (result != w32.IDOK) return;

@@ -825,7 +825,7 @@ pub fn performAction(
                             _ = w32.MessageBoxW(
                                 hwnd_val,
                                 std.unicode.utf8ToUtf16LeStringLiteral("The shell process exited unexpectedly."),
-                                std.unicode.utf8ToUtf16LeStringLiteral("Ghostty"),
+                                std.unicode.utf8ToUtf16LeStringLiteral("Spectre"),
                                 w32.MB_ICONWARNING,
                             );
                             return true;
@@ -834,7 +834,7 @@ pub fn performAction(
                         _ = w32.MessageBoxW(
                             hwnd_val,
                             @ptrCast(&utf16_buf),
-                            std.unicode.utf8ToUtf16LeStringLiteral("Ghostty"),
+                            std.unicode.utf8ToUtf16LeStringLiteral("Spectre"),
                             w32.MB_ICONWARNING,
                         );
                     }
@@ -1346,7 +1346,7 @@ fn keyToVk(key: @import("../../input/key.zig").Key) ?u32 {
 // -----------------------------------------------------------------------
 
 /// GitHub releases API URL for this fork.
-const UPDATE_URL = "https://api.github.com/repos/InsipidPoint/ghostty-windows/releases/latest";
+const UPDATE_URL = "https://api.github.com/repos/WolftacDigital/Spectre/releases/latest";
 
 /// Custom message posted from the update thread to the message loop.
 const WM_APP_UPDATE_AVAILABLE: u32 = w32.WM_APP + 2;
@@ -1356,7 +1356,7 @@ const WM_APP_UPDATE_AVAILABLE: u32 = w32.WM_APP + 2;
 const WM_APP_TRAY: u32 = w32.WM_APP + 3;
 
 /// User-facing GitHub releases page that the update balloon links to.
-const RELEASES_URL = "https://github.com/InsipidPoint/ghostty-windows/releases/latest";
+const RELEASES_URL = "https://github.com/WolftacDigital/Spectre/releases/latest";
 
 /// Tray icon and timer IDs for notifications. Distinct IDs mean the
 /// desktop and update balloons can coexist without one's auto-cleanup
@@ -1496,7 +1496,7 @@ fn showUpdateNotification(self: *App, ver: []const u8) void {
     nid.uVersion_or_uTimeout = 10000;
 
     // Title
-    const title = std.unicode.utf8ToUtf16LeStringLiteral("Ghostty Update Available");
+    const title = std.unicode.utf8ToUtf16LeStringLiteral("Spectre Update Available");
     @memcpy(nid.szInfoTitle[0..title.len], title);
     nid.szInfoTitle[title.len] = 0;
 
@@ -1508,7 +1508,7 @@ fn showUpdateNotification(self: *App, ver: []const u8) void {
     @memcpy(nid.szInfo[0..wlen], body_utf16[0..wlen]);
     nid.szInfo[wlen] = 0;
 
-    const tip = std.unicode.utf8ToUtf16LeStringLiteral("Ghostty");
+    const tip = std.unicode.utf8ToUtf16LeStringLiteral("Spectre");
     @memcpy(nid.szTip[0..tip.len], tip);
     nid.szTip[tip.len] = 0;
 
@@ -1521,7 +1521,7 @@ const VersionResult = struct { tag: [128]u8, len: usize };
 
 /// Fetch the latest release tag from GitHub. Returns the tag string.
 fn fetchLatestVersion() !VersionResult {
-    const agent = std.unicode.utf8ToUtf16LeStringLiteral("Ghostty-UpdateCheck/1.0");
+    const agent = std.unicode.utf8ToUtf16LeStringLiteral("Spectre-UpdateCheck/1.0");
     const inet = w32.InternetOpenW(agent, w32.INTERNET_OPEN_TYPE_PRECONFIG, null, null, 0) orelse
         return error.InternetOpenFailed;
     defer _ = w32.InternetCloseHandle(inet);
@@ -1643,7 +1643,7 @@ fn showDesktopNotification(
     nid.szInfo[body_len] = 0;
 
     // Tooltip
-    const tip = std.unicode.utf8ToUtf16LeStringLiteral("Ghostty");
+    const tip = std.unicode.utf8ToUtf16LeStringLiteral("Spectre");
     @memcpy(nid.szTip[0..tip.len], tip);
     nid.szTip[tip.len] = 0;
 

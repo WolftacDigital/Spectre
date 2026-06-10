@@ -12,7 +12,9 @@ install_step: *std.Build.Step.InstallArtifact,
 
 pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty {
     const exe: *std.Build.Step.Compile = b.addExecutable(.{
-        .name = "ghostty",
+        // Spectre: Windows builds ship as spectre.exe; other platforms
+        // keep the upstream name.
+        .name = if (cfg.target.result.os.tag == .windows) "spectre" else "ghostty",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = cfg.target,
@@ -59,7 +61,7 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
             else
                 .Windows;
             exe.addWin32ResourceFile(.{
-                .file = b.path("dist/windows/ghostty.rc"),
+                .file = b.path("dist/windows/spectre.rc"),
             });
         },
 

@@ -193,7 +193,7 @@ pub fn init(self: *Window, app: *App, options: InitOptions) !void {
     const hwnd = w32.CreateWindowExW(
         ex_style,
         App.WINDOW_CLASS_NAME,
-        std.unicode.utf8ToUtf16LeStringLiteral("Ghostty"),
+        std.unicode.utf8ToUtf16LeStringLiteral("Spectre"),
         style,
         cx,
         cy,
@@ -370,7 +370,7 @@ pub fn addTab(self: *Window) !*Surface {
     self.tab_count += 1;
 
     // Set default title.
-    const default_title = std.unicode.utf8ToUtf16LeStringLiteral("Ghostty");
+    const default_title = std.unicode.utf8ToUtf16LeStringLiteral("Spectre");
     @memcpy(self.tab_titles[pos][0..default_title.len], default_title);
     self.tab_title_lens[pos] = @intCast(default_title.len);
 

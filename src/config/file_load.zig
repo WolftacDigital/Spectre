@@ -6,6 +6,16 @@ const internal_os = @import("../os/main.zig");
 
 const log = std.log.scoped(.config);
 
+/// Spectre's native default path for the configuration file
+/// (Windows: %LOCALAPPDATA%\spectre\config). Returned value must be
+/// freed by the caller.
+pub fn spectreXdgPath(alloc: Allocator) ![]const u8 {
+    return try internal_os.xdg.config(
+        alloc,
+        .{ .subdir = "spectre/config" },
+    );
+}
+
 /// Default path for the XDG home configuration file. Returned value
 /// must be freed by the caller.
 pub fn defaultXdgPath(alloc: Allocator) ![]const u8 {
@@ -27,6 +37,43 @@ pub fn legacyDefaultXdgPath(alloc: Allocator) ![]const u8 {
 /// Preferred default path for the XDG home configuration file.
 /// Returned value must be freed by the caller.
 pub fn preferredXdgPath(alloc: Allocator) ![]const u8 {
+    // Spectre (Windows): our native config path wins when it exists,
+    // and is also the preferred location to create a new config when
+    // no config exists anywhere. The Ghostty paths below remain as
+    // compatibility fallbacks.
+    if (comptime builtin.os.tag == .windows) {
+        const spectre_path = try spectreXdgPath(alloc);
+        if (open(spectre_path)) |f| {
+            f.close();
+            return spectre_path;
+        } else |_| {}
+
+        errdefer alloc.free(spectre_path);
+        ghostty: {
+            const xdg_path = try defaultXdgPath(alloc);
+            if (open(xdg_path)) |f| {
+                f.close();
+                alloc.free(spectre_path);
+                return xdg_path;
+            } else |_| {}
+
+            alloc.free(xdg_path);
+            const legacy_xdg_path = try legacyDefaultXdgPath(alloc);
+            if (open(legacy_xdg_path)) |f| {
+                f.close();
+                alloc.free(spectre_path);
+                return legacy_xdg_path;
+            } else |_| {}
+
+            alloc.free(legacy_xdg_path);
+            break :ghostty;
+        }
+
+        // Nothing exists; Spectre's native path is where a new config
+        // should be created.
+        return spectre_path;
+    }
+
     // If the XDG path exists, use that.
     const xdg_path = try defaultXdgPath(alloc);
     if (open(xdg_path)) |f| {

@@ -4030,6 +4030,15 @@ fn writeConfigTemplate(path: []const u8) !void {
 /// The legacy `config` file (without extension) is first loaded,
 /// then `config.ghostty`.
 pub fn loadDefaultFiles(self: *Config, alloc: Allocator) !void {
+    // Spectre (Windows): our native config wins when present;
+    // otherwise fall through to the Ghostty paths so existing
+    // Ghostty configs keep working.
+    if (comptime builtin.os.tag == .windows) {
+        const spectre_path = try file_load.spectreXdgPath(alloc);
+        defer alloc.free(spectre_path);
+        if (self.loadOptionalFile(alloc, spectre_path) != .not_found) return;
+    }
+
     // Load XDG first
     const legacy_xdg_path = try file_load.legacyDefaultXdgPath(alloc);
     defer alloc.free(legacy_xdg_path);
@@ -4094,9 +4103,19 @@ pub fn loadDefaultFiles(self: *Config, alloc: Allocator) !void {
         }
     } else {
         if (!xdg_loaded) {
-            writeConfigTemplate(xdg_path) catch |err| {
-                log.warn("error creating template config file err={}", .{err});
-            };
+            // Spectre (Windows): create the template in our native
+            // location rather than the Ghostty directory.
+            if (comptime builtin.os.tag == .windows) {
+                const spectre_path = try file_load.spectreXdgPath(alloc);
+                defer alloc.free(spectre_path);
+                writeConfigTemplate(spectre_path) catch |err| {
+                    log.warn("error creating template config file err={}", .{err});
+                };
+            } else {
+                writeConfigTemplate(xdg_path) catch |err| {
+                    log.warn("error creating template config file err={}", .{err});
+                };
+            }
         }
     }
 }
