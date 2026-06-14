@@ -12,6 +12,6 @@ NestedInstallerFiles:
 Installers:
   - Architecture: x64
     InstallerUrl: https://github.com/WolftacDigital/Spectre/releases/download/v0.3.0/spectre-0.3.0-x64.zip
-    InstallerSha256: 4DE151D3CD503F85DA834C2748D3D95BD97C6F058D4D8BA0A31AA90D4B657079
+    InstallerSha256: 0C8F3D3C1D6B649B2F2C582808D9E522AC6EEC526E05BE7733F20A210F6D249B
 ManifestType: installer
 ManifestVersion: 1.6.0
