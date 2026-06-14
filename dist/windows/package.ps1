@@ -48,6 +48,18 @@ Unblock-File the zip before extracting.
 "@
 Copy-Item (Join-Path $PSScriptRoot 'install.ps1') $staging
 
+# Brand assets installed by install.ps1: fonts, theme, default config.
+$distRoot = Join-Path $RepoRoot 'dist'
+if (Test-Path (Join-Path $distRoot 'fonts')) {
+    Copy-Item (Join-Path $distRoot 'fonts') $staging -Recurse -Force
+}
+if (Test-Path (Join-Path $distRoot 'themes')) {
+    Copy-Item (Join-Path $distRoot 'themes') $staging -Recurse -Force
+}
+if (Test-Path (Join-Path $distRoot 'spectre-default-config')) {
+    Copy-Item (Join-Path $distRoot 'spectre-default-config') $staging -Force
+}
+
 $zip = Join-Path $OutDir "spectre-$Version-x64.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path "$staging\*" -DestinationPath $zip

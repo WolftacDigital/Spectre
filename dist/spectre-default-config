@@ -1,0 +1,51 @@
+# ============================================================
+#  Spectre — Wolftac Digital operator terminal
+#  Ink canvas · paper text · signal-green accent
+#  "Build with precision. Operate with leverage."
+# ============================================================
+# This is the default config written on first install. Edit freely —
+# Spectre reloads with Ctrl+Shift+, (or relaunch). Full options:
+#   spectre +show-config --default --docs
+
+command = pwsh
+
+# --- Wolftac brand palette ---
+background = #050606
+foreground = #E8EAE9
+cursor-color = #8FF0BC
+cursor-text = #050606
+selection-background = #243029
+selection-foreground = #F6F7F2
+palette = 0=#0A0E10
+palette = 1=#E5484D
+palette = 2=#8FF0BC
+palette = 3=#E0B354
+palette = 4=#7FB0C9
+palette = 5=#B98BC9
+palette = 6=#6FD3C4
+palette = 7=#D3D7CF
+palette = 8=#4A5450
+palette = 9=#FF6B74
+palette = 10=#B6FFB7
+palette = 11=#F0C868
+palette = 12=#A8CFE0
+palette = 13=#D2A8E0
+palette = 14=#9AEFE0
+palette = 15=#F6F7F2
+
+# --- Typography (brand fonts, installed by install.ps1) ---
+font-family = IBM Plex Mono
+font-size = 12.5
+adjust-cell-height = 16%
+
+# --- Feel ---
+cursor-style = block
+mouse-hide-while-typing = true
+window-padding-x = 16
+window-padding-y = 12
+
+# Always-visible tab bar with the + button
+window-show-tab-bar = always
+
+# Restore windows/tabs/working-dirs across restarts
+window-save-state = always
