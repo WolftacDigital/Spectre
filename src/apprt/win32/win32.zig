@@ -1385,8 +1385,43 @@ pub const MA_NOACTIVATE: isize = 3;
 pub const HKEY = *opaque {};
 pub const HKEY_CURRENT_USER: HKEY = @ptrFromInt(0x80000001);
 pub const KEY_READ: u32 = 0x00020019;
+pub const KEY_WRITE: u32 = 0x00020006;
+pub const KEY_ALL_ACCESS: u32 = 0xF003F;
 pub const REG_DWORD: u32 = 4;
+pub const REG_SZ: u32 = 1;
+pub const REG_OPTION_NON_VOLATILE: u32 = 0;
 pub const ERROR_SUCCESS: u32 = 0;
+
+pub extern "advapi32" fn RegCreateKeyExW(
+    hKey: HKEY,
+    lpSubKey: [*:0]const u16,
+    Reserved: u32,
+    lpClass: ?[*:0]const u16,
+    dwOptions: u32,
+    samDesired: u32,
+    lpSecurityAttributes: ?*anyopaque,
+    phkResult: *HKEY,
+    lpdwDisposition: ?*u32,
+) callconv(.winapi) u32;
+
+pub extern "advapi32" fn RegSetValueExW(
+    hKey: HKEY,
+    lpValueName: ?[*:0]const u16,
+    Reserved: u32,
+    dwType: u32,
+    lpData: ?[*]const u8,
+    cbData: u32,
+) callconv(.winapi) u32;
+
+pub extern "advapi32" fn RegDeleteTreeW(
+    hKey: HKEY,
+    lpSubKey: ?[*:0]const u16,
+) callconv(.winapi) u32;
+
+pub extern "advapi32" fn RegDeleteKeyW(
+    hKey: HKEY,
+    lpSubKey: [*:0]const u16,
+) callconv(.winapi) u32;
 
 pub extern "advapi32" fn RegOpenKeyExW(
     hKey: HKEY,
@@ -1406,6 +1441,46 @@ pub extern "advapi32" fn RegQueryValueExW(
 ) callconv(.winapi) u32;
 
 pub extern "advapi32" fn RegCloseKey(hKey: HKEY) callconv(.winapi) u32;
+
+// -----------------------------------------------------------------------
+// COM (ole32) — for the default-terminal handoff server (issue #6)
+// -----------------------------------------------------------------------
+
+pub const COINIT_MULTITHREADED: u32 = 0x0;
+pub const COINIT_APARTMENTTHREADED: u32 = 0x2;
+pub const CLSCTX_LOCAL_SERVER: u32 = 0x4;
+pub const REGCLS_SINGLEUSE: u32 = 0;
+pub const REGCLS_MULTIPLEUSE: u32 = 1;
+pub const REGCLS_SUSPENDED: u32 = 4;
+
+pub extern "ole32" fn CoInitializeEx(
+    pvReserved: ?*anyopaque,
+    dwCoInit: u32,
+) callconv(.winapi) i32;
+
+pub extern "ole32" fn CoUninitialize() callconv(.winapi) void;
+
+pub extern "ole32" fn CoRegisterClassObject(
+    rclsid: *const anyopaque,
+    pUnk: *anyopaque,
+    dwClsContext: u32,
+    flags: u32,
+    lpdwRegister: *u32,
+) callconv(.winapi) i32;
+
+pub extern "ole32" fn CoRevokeClassObject(
+    dwRegister: u32,
+) callconv(.winapi) i32;
+
+pub extern "ole32" fn CoResumeClassObjects() callconv(.winapi) i32;
+
+pub extern "ole32" fn CoCreateInstance(
+    rclsid: *const anyopaque,
+    pUnkOuter: ?*anyopaque,
+    dwClsContext: u32,
+    riid: *const anyopaque,
+    ppv: *?*anyopaque,
+) callconv(.winapi) i32;
 
 // -----------------------------------------------------------------------
 // Settings change broadcast

@@ -2263,4 +2263,5 @@ test {
     // docs/DEFTERM.md).
     _ = @import("defterm/com.zig");
     _ = @import("defterm/server.zig");
+    _ = @import("defterm/register.zig");
 }
