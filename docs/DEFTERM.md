@@ -90,7 +90,36 @@ Uninstall restores both `Delegation*` values to the all-zero GUID (the
 - **P3 — PTY-backed surface:** a surface that wraps externally-provided
   in/out/signal pipes instead of calling `CreatePseudoConsole`
   (`src/pty.zig` + `Surface.init` get an "attach" path). Watch `client`
-  for exit.
+  for exit. **Implementation map (worked out, P4b session):**
+  - **Seam:** `Subprocess.start` in `src/termio/Exec.zig:984` creates the
+    Pty via `Pty.open()` (line 997) and returns `{read, write}` fds. The
+    attach path forks here: instead of `Pty.open()` + spawn, build a Pty
+    from the handed-off handles and skip the spawn (the `client` process
+    already exists).
+  - **Pty.attach():** new constructor in `WindowsPty` (`src/pty.zig:325`).
+    The struct assumes an owned `pseudo_console: HPCON`; an attached Pty has
+    **no** HPCON (the `ref` handle keeps conhost's pseudoconsole alive
+    instead). Make WindowsPty a tagged variant (`owned` vs `attached`) so
+    `deinit` and resize branch correctly.
+  - **Pipe directionality (CRITICAL, must verify):** terminal READS VT from
+    one handle and WRITES input to the other. Map handoff `out`→ our
+    `out_pipe` (read), handoff `in`→ our `in_pipe` (write) — but the IDL
+    param names are ambiguous; cross-check against Windows Terminal's
+    `ConptyConnection`/`CTerminalHandoff` and CONFIRM with a real or
+    synthetic handoff. Backwards = dead terminal.
+  - **Resize:** owned Pty calls `ResizePseudoConsole(hpcon, …)`; attached
+    Pty has no hpcon, so resize writes `PTY_SIGNAL_RESIZE_WINDOW` (8) +
+    COORD to the `signal` pipe. (Signal IDs in microsoft/terminal
+    `winconpty.h`: SHOWHIDE=1, CLEAR=2, REPARENT=3, RESIZE=8.)
+  - **Client exit:** register a wait on the `client` process handle; on
+    exit, close the surface (mirrors the normal child-exit path).
+  - **Synthetic harness (how to verify without the flip):** create a real
+    ConPTY + spawn `cmd /c echo MARKER`, take that ConPTY's pipe ends, call
+    our `EstablishPtyHandoff` with them, and assert the attached surface
+    reads `MARKER`. This simulates exactly what conhost does, with zero
+    system-default change.
+  - In server mode, `onHandoff` (currently PostQuitMessage) instead builds
+    the surface and keeps the message loop running to host it.
 - **P4 — Registration UX (gated):** `spectre +install-defterm` /
   `+uninstall-defterm` write/restore the registry keys. **Only run with
   explicit user confirmation**; document the one-command rollback.
