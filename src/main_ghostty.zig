@@ -55,6 +55,15 @@ pub fn main() !MainReturn {
     defer state.deinit();
     const alloc = state.alloc;
 
+    // Spectre (Windows): handle the default-terminal handoff command lines
+    // (`--defterm-server`, `--install-defterm`, `--uninstall-defterm`)
+    // before the normal terminal/action startup. The import is gated so
+    // the win32-only module is never analyzed on other targets.
+    if (comptime builtin.os.tag == .windows) {
+        const defterm_entry = @import("apprt/win32/defterm/entry.zig");
+        if (defterm_entry.maybeRun(alloc) catch false) return;
+    }
+
     if (comptime builtin.mode == .Debug) {
         std.log.warn("This is a debug build. Performance will be very poor.", .{});
         std.log.warn("You should only use a debug build for developing Ghostty.", .{});
