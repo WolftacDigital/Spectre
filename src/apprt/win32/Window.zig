@@ -10,6 +10,7 @@ const apprt = @import("../../apprt.zig");
 const App = @import("App.zig");
 const Surface = @import("Surface.zig");
 const SplitTree = @import("../../datastruct/split_tree.zig").SplitTree;
+const session = @import("session.zig");
 const w32 = @import("win32.zig");
 
 const log = std.log.scoped(.win32);
@@ -120,6 +121,15 @@ pub const InitOptions = struct {
     /// when `new_window` inherits from a parent window the user had
     /// toggled to opaque via `toggle_background_opacity`.
     force_opaque: bool = false,
+    /// Spectre session restore: if set, create the window at this saved
+    /// position/size instead of the cascade default. Maximization is
+    /// applied by the restore path after tabs are created.
+    saved_geometry: ?struct {
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+    } = null,
 };
 
 /// Apply DWM dark/light + caption color based on the configured
@@ -170,6 +180,8 @@ pub fn init(self: *Window, app: *App, options: InitOptions) !void {
     const cascade_step: i32 = 30;
     var cx: i32 = w32.CW_USEDEFAULT;
     var cy: i32 = w32.CW_USEDEFAULT;
+    var cw: i32 = 800;
+    var ch: i32 = 600;
     if (!options.is_quick_terminal and app.windows.items.len > 0) {
         // Find the previously created window's position and bump.
         const prev = app.windows.items[app.windows.items.len - 1];
@@ -189,6 +201,14 @@ pub fn init(self: *Window, app: *App, options: InitOptions) !void {
         }
     }
 
+    // Spectre session restore: saved geometry overrides the cascade.
+    if (options.saved_geometry) |g| {
+        cx = g.x;
+        cy = g.y;
+        cw = @max(g.width, 200);
+        ch = @max(g.height, 150);
+    }
+
     // Create the top-level container window using the GhosttyWindow class.
     const hwnd = w32.CreateWindowExW(
         ex_style,
@@ -197,8 +217,8 @@ pub fn init(self: *Window, app: *App, options: InitOptions) !void {
         style,
         cx,
         cy,
-        800,
-        600,
+        cw,
+        ch,
         null,
         null,
         app.hinstance,
@@ -1606,6 +1626,12 @@ pub fn cancelTabRename(self: *Window) void {
 /// because Win32 destroys child HWNDs during DestroyWindow and the
 /// OpenGL driver crashes if contexts are still active on destroyed windows.
 pub fn close(self: *Window) void {
+    // Spectre session restore: snapshot the session while this window
+    // (and all others) are still alive and their surfaces readable.
+    // Best-effort; never blocks the close. saveSession itself no-ops
+    // when restore is disabled or there are no windows.
+    if (!self.is_quick_terminal) self.app.saveSession();
+
     // First, cleanly shut down all surfaces (renderer/IO threads, WGL, DC).
     self.cleanupAllSurfaces();
 
@@ -1613,6 +1639,67 @@ pub fn close(self: *Window) void {
     if (self.hwnd) |hwnd| {
         _ = w32.DestroyWindow(hwnd);
     }
+}
+
+/// Spectre session restore: capture this window's geometry, tabs, and
+/// per-pane working directories into a session.WindowState allocated
+/// from the given session's arena.
+pub fn captureSessionState(self: *Window, s: *session.Session) !session.WindowState {
+    var ws: session.WindowState = .{};
+    if (self.hwnd) |h| {
+        var wp: w32.WINDOWPLACEMENT = undefined;
+        wp.length = @sizeOf(w32.WINDOWPLACEMENT);
+        if (w32.GetWindowPlacement(h, &wp) != 0) {
+            const r = wp.rcNormalPosition;
+            ws.x = r.left;
+            ws.y = r.top;
+            ws.width = r.right - r.left;
+            ws.height = r.bottom - r.top;
+            ws.maximized = wp.showCmd == w32.SW_SHOWMAXIMIZED;
+        }
+    }
+
+    var tabs: std.ArrayList(session.Tab) = .empty;
+    var i: usize = 0;
+    while (i < self.tab_count) : (i += 1) {
+        const node = try self.captureNode(s, &self.tab_trees[i], .root);
+        try tabs.append(s.alloc(), .{
+            .root = node,
+            .active = i == self.active_tab,
+        });
+    }
+    ws.tabs = try tabs.toOwnedSlice(s.alloc());
+    return ws;
+}
+
+fn captureNode(
+    self: *Window,
+    s: *session.Session,
+    tree: *const SplitTree(Surface),
+    handle: SplitTree(Surface).Node.Handle,
+) !*session.Node {
+    if (tree.isEmpty()) return s.leaf(null);
+    return switch (tree.nodes[handle.idx()]) {
+        .leaf => |surface| leaf: {
+            const alloc = self.app.core_app.alloc;
+            const cwd = surface.core_surface.pwd(alloc) catch null;
+            defer if (cwd) |c| alloc.free(c);
+            break :leaf s.leaf(cwd);
+        },
+        .split => |sp| split: {
+            const left = try self.captureNode(s, tree, sp.left);
+            const right = try self.captureNode(s, tree, sp.right);
+            break :split s.split(
+                switch (sp.layout) {
+                    .horizontal => .horizontal,
+                    .vertical => .vertical,
+                },
+                @floatCast(sp.ratio),
+                left,
+                right,
+            );
+        },
+    };
 }
 
 /// Deinit and free all tab trees (which unrefs and frees surfaces).

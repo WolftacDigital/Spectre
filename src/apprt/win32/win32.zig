@@ -563,6 +563,30 @@ pub extern "user32" fn IsZoomed(
     hWnd: HWND,
 ) callconv(.winapi) i32;
 
+/// SetWindowPlacement/GetWindowPlacement showCmd values we use.
+pub const SW_SHOWNORMAL: u32 = 1;
+pub const SW_SHOWMINIMIZED: u32 = 2;
+pub const SW_SHOWMAXIMIZED: u32 = 3;
+
+pub const WINDOWPLACEMENT = extern struct {
+    length: u32,
+    flags: u32,
+    showCmd: u32,
+    ptMinPosition: POINT,
+    ptMaxPosition: POINT,
+    rcNormalPosition: RECT,
+};
+
+pub extern "user32" fn GetWindowPlacement(
+    hWnd: HWND,
+    lpwndpl: *WINDOWPLACEMENT,
+) callconv(.winapi) i32;
+
+pub extern "user32" fn SetWindowPlacement(
+    hWnd: HWND,
+    lpwndpl: *const WINDOWPLACEMENT,
+) callconv(.winapi) i32;
+
 pub extern "user32" fn SetCursor(
     // NULL is documented as valid — it hides the cursor. Make the
     // parameter optional so callers can pass null without a cast.

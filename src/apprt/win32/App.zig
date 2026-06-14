@@ -15,6 +15,7 @@ const QuickTerminal = @import("QuickTerminal.zig");
 const Surface = @import("Surface.zig");
 const Window = @import("Window.zig");
 const SplitTree = @import("../../datastruct/split_tree.zig").SplitTree;
+const session = @import("session.zig");
 const w32 = @import("win32.zig");
 
 const build_config = @import("../../build_config.zig");
@@ -82,6 +83,12 @@ quick_terminal: ?*QuickTerminal = null,
 
 /// Whether a global hotkey has been registered.
 global_hotkey_registered: bool = false,
+
+/// Spectre session restore: a working directory staged by the restore
+/// path immediately before an `addTab`/`newSplit` call, consumed by
+/// `Surface.init` to spawn that surface in the saved directory. Always
+/// null outside of restore.
+restore_cwd: ?[]const u8 = null,
 
 pub fn init(
     self: *App,
@@ -222,13 +229,24 @@ pub fn init(
 }
 
 pub fn run(self: *App) !void {
-    // Create the initial Window container with one tab.
     const alloc = self.core_app.alloc;
-    const window = try alloc.create(Window);
-    errdefer alloc.destroy(window);
-    try window.init(self, .{});
-    try self.windows.append(alloc, window);
-    _ = try window.addTab();
+
+    // Spectre session restore: if enabled and a saved session exists,
+    // rebuild windows/tabs from it. Falls through to the default single
+    // window if restore is disabled, fails, or produced nothing.
+    const restored = self.restoreSession() catch |err| restored: {
+        log.warn("session restore failed: {}", .{err});
+        break :restored false;
+    };
+
+    if (!restored) {
+        // Create the initial Window container with one tab.
+        const window = try alloc.create(Window);
+        errdefer alloc.destroy(window);
+        try window.init(self, .{});
+        try self.windows.append(alloc, window);
+        _ = try window.addTab();
+    }
 
     // Enter the Win32 message loop
     var msg: w32.MSG = undefined;
@@ -355,6 +373,13 @@ pub fn run(self: *App) !void {
 pub fn terminate(self: *App) void {
     self.stopQuitTimer();
 
+    // Spectre session restore: capture the session for the explicit-quit
+    // path (the `.quit` action posts WM_QUIT without closing windows, so
+    // they are still alive here). saveSession no-ops when restore is
+    // disabled or no windows remain (the close-last-window path already
+    // saved and emptied the list, so this won't clobber it).
+    self.saveSession();
+
     // Unregister global hotkey.
     if (self.global_hotkey_registered) {
         _ = w32.UnregisterHotKey(null, 1);
@@ -403,6 +428,140 @@ pub fn terminate(self: *App) void {
     }
 
     self.config.deinit();
+}
+
+// =====================================================================
+// Spectre session restore
+// =====================================================================
+
+/// Whether session save/restore is enabled. On Windows there is no OS
+/// "reopen windows on quit" setting to defer to, so `default` is treated
+/// as off; the user opts in with `window-save-state = always`.
+fn sessionRestoreEnabled(self: *const App) bool {
+    return self.config.@"window-save-state" == .always;
+}
+
+/// `%LOCALAPPDATA%\spectre\session.json`. Caller owns the returned path.
+fn sessionPath(self: *const App, alloc: Allocator) ?[]u8 {
+    _ = self;
+    const dir = std.process.getEnvVarOwned(alloc, "LOCALAPPDATA") catch return null;
+    defer alloc.free(dir);
+    return std.fs.path.join(alloc, &.{ dir, "spectre", "session.json" }) catch null;
+}
+
+/// Snapshot all live top-level windows to the session file. Best-effort:
+/// never fails the caller. No-ops when restore is disabled or there are
+/// no non-quick-terminal windows (so it never clobbers a good file with
+/// an empty snapshot).
+pub fn saveSession(self: *App) void {
+    if (!self.sessionRestoreEnabled()) return;
+    if (self.windows.items.len == 0) return;
+
+    const alloc = self.core_app.alloc;
+    var sess = session.Session.init(alloc);
+    defer sess.deinit();
+
+    var windows: std.ArrayList(session.WindowState) = .empty;
+    for (self.windows.items) |window| {
+        if (window.is_quick_terminal) continue;
+        const ws = window.captureSessionState(&sess) catch continue;
+        if (ws.tabs.len == 0) continue;
+        windows.append(sess.alloc(), ws) catch continue;
+    }
+    sess.windows = windows.toOwnedSlice(sess.alloc()) catch return;
+    if (sess.windows.len == 0) return;
+
+    const path = self.sessionPath(alloc) orelse return;
+    defer alloc.free(path);
+
+    const bytes = sess.serializeAlloc(alloc) catch return;
+    defer alloc.free(bytes);
+
+    if (std.fs.path.dirname(path)) |dir| std.fs.cwd().makePath(dir) catch {};
+    const f = std.fs.cwd().createFile(path, .{ .truncate = true }) catch |err| {
+        log.warn("session save: create failed: {}", .{err});
+        return;
+    };
+    defer f.close();
+    f.writeAll(bytes) catch |err| log.warn("session save: write failed: {}", .{err});
+}
+
+/// Rebuild windows/tabs from the saved session. Returns true if at least
+/// one window was created (so the caller skips the default window).
+///
+/// v1 limitation: split panes are serialized but a restored tab is
+/// rebuilt as a single pane at the first leaf's working directory. The
+/// full split shape remains in the file for a future build to restore.
+fn restoreSession(self: *App) !bool {
+    if (!self.sessionRestoreEnabled()) return false;
+
+    const alloc = self.core_app.alloc;
+    const path = self.sessionPath(alloc) orelse return false;
+    defer alloc.free(path);
+
+    const bytes = std.fs.cwd().readFileAlloc(alloc, path, 4 * 1024 * 1024) catch return false;
+    defer alloc.free(bytes);
+
+    var sess = session.Session.parse(alloc, bytes) catch |err| {
+        log.warn("session restore: parse failed ({}); ignoring saved session", .{err});
+        return false;
+    };
+    defer sess.deinit();
+    if (sess.windows.len == 0) return false;
+
+    var created_any = false;
+    var split_collapsed = false;
+    for (sess.windows) |ws| {
+        const window = alloc.create(Window) catch continue;
+        window.init(self, .{ .saved_geometry = .{
+            .x = ws.x,
+            .y = ws.y,
+            .width = ws.width,
+            .height = ws.height,
+        } }) catch {
+            alloc.destroy(window);
+            continue;
+        };
+        self.windows.append(alloc, window) catch {
+            window.deinit();
+            alloc.destroy(window);
+            continue;
+        };
+        created_any = true;
+
+        var active_idx: usize = 0;
+        for (ws.tabs, 0..) |tab, ti| {
+            if (tab.root.* == .split) split_collapsed = true;
+            const leaf = tab.root.firstLeaf();
+
+            // Stage the cwd for Surface.init, then create the tab.
+            self.restore_cwd = leaf.cwd;
+            _ = window.addTab() catch {
+                self.restore_cwd = null;
+                continue;
+            };
+            self.restore_cwd = null;
+            if (tab.active) active_idx = ti;
+        }
+
+        // Guarantee at least one tab so the window is usable.
+        if (window.tab_count == 0) {
+            self.restore_cwd = null;
+            _ = window.addTab() catch {};
+        } else if (active_idx < window.tab_count) {
+            window.selectTabIndex(active_idx);
+        }
+
+        // Re-apply maximized state after tabs exist and the window shown.
+        if (ws.maximized) {
+            if (window.hwnd) |h| _ = w32.ShowWindow(h, @intCast(w32.SW_SHOWMAXIMIZED));
+        }
+    }
+
+    if (split_collapsed) {
+        log.info("session restore: one or more tabs had splits; restored first pane only (v1)", .{});
+    }
+    return created_any;
 }
 
 /// Wake up the message loop from any thread by posting a message

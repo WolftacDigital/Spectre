@@ -1131,11 +1131,6 @@ pub const StreamHandler = struct {
             return;
         }
 
-        if (builtin.os.tag == .windows) {
-            log.warn("reportPwd unimplemented on windows", .{});
-            return;
-        }
-
         // Attempt to parse this file-style URI using options appropriate
         // for this OSC 7 context (e.g. kitty-shell-cwd expects the full,
         // unencoded path).
@@ -1187,7 +1182,27 @@ pub const StreamHandler = struct {
         var arena_alloc: std.heap.ArenaAllocator = .init(self.alloc);
         var stack_alloc = std.heap.stackFallback(1024, arena_alloc.allocator());
         defer arena_alloc.deinit();
-        const path = try uri.path.toRawMaybeAlloc(stack_alloc.get());
+        // stackFallback().get() may only be called once; capture and reuse.
+        const tmp_alloc = stack_alloc.get();
+        const raw_path = try uri.path.toRawMaybeAlloc(tmp_alloc);
+
+        // On Windows, OSC 7 file URIs encode the path as `/C:/Users/...`
+        // (a leading slash before the drive letter, forward slashes). Turn
+        // that into a native `C:\Users\...` path so it is usable as a
+        // working directory (e.g. for session restore and the proxy/title).
+        const path = if (builtin.os.tag == .windows) win: {
+            var p = raw_path;
+            if (p.len >= 3 and p[0] == '/' and
+                std.ascii.isAlphabetic(p[1]) and p[2] == ':')
+            {
+                p = p[1..];
+            }
+            const native = try tmp_alloc.dupe(u8, p);
+            for (native) |*ch| if (ch.* == '/') {
+                ch.* = '\\';
+            };
+            break :win native;
+        } else raw_path;
 
         log.debug("terminal pwd: {s}", .{path});
         try self.terminal.setPwd(path);

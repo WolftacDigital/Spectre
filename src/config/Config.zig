@@ -2225,7 +2225,17 @@ keybind: Keybinds = .{},
 ///
 /// The default value is `default`.
 ///
-/// This is currently only supported on macOS. This has no effect on Linux.
+/// On macOS this is currently the only platform with full upstream
+/// support. Spectre (Windows) implements `always`: the window/tab layout
+/// and each pane's working directory are saved to
+/// `%LOCALAPPDATA%\spectre\session.json` on exit and restored on the next
+/// launch. Because Windows has no OS-level "reopen windows on quit"
+/// setting to defer to, `default` is treated the same as `never` on
+/// Windows — set `window-save-state = always` to opt in. (v1 restores
+/// windows and tabs with their working directories; split panes are saved
+/// but a restored tab currently reopens as a single pane.)
+///
+/// This has no effect on Linux.
 @"window-save-state": WindowSaveState = .default,
 
 /// Resize the window in discrete increments of the focused surface's cell size.

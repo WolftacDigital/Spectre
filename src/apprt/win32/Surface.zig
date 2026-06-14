@@ -277,6 +277,19 @@ pub fn init(
     var config = try apprt.surface.newConfig(app.core_app, &app.config, context);
     defer config.deinit();
 
+    // Spectre session restore: if the App has staged a working directory
+    // for the surface about to be created (set transiently around the
+    // addTab/newSplit call by the restore path), override the surface's
+    // working directory with it. This mirrors how newConfig injects an
+    // inherited cwd, so the spawn path is identical and proven.
+    if (app.restore_cwd) |cwd| {
+        if (config._arena) |*arena| {
+            config.@"working-directory" = .{
+                .path = arena.allocator().dupe(u8, cwd) catch cwd,
+            };
+        }
+    }
+
     // Initialize the core surface. This sets up fonts, the renderer, PTY,
     // and spawns the renderer + IO threads.
     try self.core_surface.init(

@@ -275,14 +275,22 @@ pub fn init(b: *std.Build, appVersion: []const u8, libVersion: []const u8) !Conf
         if (vsn.tag) |tag| {
             // Tip releases behave just like any other pre-release so we skip.
             if (!std.mem.eql(u8, tag, "tip")) {
-                // The Windows fork uses `win-vX.Y.Z` tags that track the
-                // fork's own release schedule, independent of upstream's
-                // `vX.Y.Z` (which must match build.zig.zon). For win-v
-                // tags, parse the tag's version directly and use it as
-                // build_config.version.
-                if (std.mem.startsWith(u8, tag, "win-v")) {
-                    const parsed = std.SemanticVersion.parse(tag["win-v".len..]) catch {
-                        @panic("win-v tags must be in win-vX.Y.Z format");
+                // Spectre versions its releases independently of upstream
+                // Ghostty's build.zig.zon, so the release tag is the source
+                // of truth for the binary version. We accept both Spectre's
+                // own `vX.Y.Z` tags and the parent Windows fork's legacy
+                // `win-vX.Y.Z` tags, parsing the version directly from the
+                // tag rather than requiring it to match build.zig.zon.
+                const ver_str: ?[]const u8 = if (std.mem.startsWith(u8, tag, "win-v"))
+                    tag["win-v".len..]
+                else if (std.mem.startsWith(u8, tag, "v"))
+                    tag["v".len..]
+                else
+                    null;
+
+                if (ver_str) |vs| {
+                    const parsed = std.SemanticVersion.parse(vs) catch {
+                        @panic("release tags must be in vX.Y.Z or win-vX.Y.Z format");
                     };
                     break :version .{
                         .major = parsed.major,
@@ -291,21 +299,7 @@ pub fn init(b: *std.Build, appVersion: []const u8, libVersion: []const u8) !Conf
                     };
                 }
 
-                const v_expected = b.fmt("v{d}.{d}.{d}", .{
-                    app_version.major,
-                    app_version.minor,
-                    app_version.patch,
-                });
-
-                if (!std.mem.eql(u8, tag, v_expected)) {
-                    @panic("tagged releases must be in vX.Y.Z format matching build.zig (or win-vX.Y.Z for the Windows fork)");
-                }
-
-                break :version .{
-                    .major = app_version.major,
-                    .minor = app_version.minor,
-                    .patch = app_version.patch,
-                };
+                @panic("release tags must be in vX.Y.Z or win-vX.Y.Z format");
             }
         }
 
