@@ -272,23 +272,26 @@ pub fn init(self: *Window, app: *App, options: InitOptions) !void {
         self.scale = @as(f32, @floatFromInt(dpi)) / 96.0;
     }
 
-    // Create the tab bar font (Segoe UI, 12px at 96 DPI, scaled).
-    const font_height: i32 = -@as(i32, @intFromFloat(16.0 * self.scale));
+    // Create the tab bar font. Wolftac brand chrome face is Chakra Petch
+    // (geometric "operator" display font); falls back to Segoe UI when the
+    // brand font isn't installed. Medium weight (500), antialiased.
+    const CLEARTYPE_QUALITY: i32 = 5;
+    const font_height: i32 = -@as(i32, @intFromFloat(15.0 * self.scale));
     self.tab_font = w32.CreateFontW(
         font_height, // cHeight (negative = character height)
         0, // cWidth
         0, // cEscapement
         0, // cOrientation
-        w32.FW_NORMAL, // cWeight
+        500, // cWeight (FW_MEDIUM)
         0, // bItalic
         0, // bUnderline
         0, // bStrikeOut
         w32.DEFAULT_CHARSET, // iCharSet
         0, // iOutPrecision
         0, // iClipPrecision
-        0, // iQuality
+        CLEARTYPE_QUALITY, // iQuality
         0, // iPitchAndFamily
-        std.unicode.utf8ToUtf16LeStringLiteral("Segoe UI"),
+        std.unicode.utf8ToUtf16LeStringLiteral("Chakra Petch"),
     );
 
     // Don't show the window yet — addTab() will show the child
