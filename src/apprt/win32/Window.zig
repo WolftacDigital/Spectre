@@ -153,6 +153,19 @@ fn applyChromeTheme(hwnd: w32.HWND, bg: anytype) void {
         @ptrCast(&caption_color),
         @sizeOf(u32),
     );
+
+    // A subtle window border, a hair lifted from the caption, gives the
+    // window clean definition against the desktop without a heavy frame.
+    const bl_r: u8 = @min(@as(u16, bg.r) + 22, 255);
+    const bl_g: u8 = @min(@as(u16, bg.g) + 22, 255);
+    const bl_b: u8 = @min(@as(u16, bg.b) + 22, 255);
+    const border_color: u32 = (@as(u32, bl_r)) | (@as(u32, bl_g) << 8) | (@as(u32, bl_b) << 16);
+    _ = w32.DwmSetWindowAttribute(
+        hwnd,
+        w32.DWMWA_BORDER_COLOR,
+        @ptrCast(&border_color),
+        @sizeOf(u32),
+    );
 }
 
 /// Called from App.config_change so the title bar tracks live config
@@ -992,6 +1005,20 @@ pub fn invalidateTabBar(self: *Window) void {
     _ = w32.InvalidateRect(hwnd, &rect, 0);
 }
 
+/// Blend two 0-255 channels: pct=0 returns `a`, pct=100 returns `b`.
+/// Used to derive sleek panel/text shades from the live theme so the
+/// chrome stays coherent with whatever background/foreground is set.
+fn mix(a: u8, b: u8, pct: u16) u8 {
+    const av: i32 = a;
+    const bv: i32 = b;
+    return @intCast(av + @divTrunc((bv - av) * @as(i32, @intCast(pct)), 100));
+}
+
+/// Wolftac brand "signal green" — the active-tab accent and hover signal.
+const BRAND_ACCENT = .{ .r = 0x8F, .g = 0xF0, .b = 0xBC };
+/// Wolftac brand alert red — destructive (close) hover.
+const BRAND_ALERT = .{ .r = 0xE5, .g = 0x48, .b = 0x4D };
+
 /// Paint the tab bar using double-buffered GDI painting.
 /// Draws tab backgrounds, text labels, close buttons (x), and the new-tab (+) button.
 fn paintTabBar(self: *Window) void {
@@ -1024,39 +1051,50 @@ fn paintTabBar(self: *Window) void {
         _ = w32.DeleteObject(mem_bmp);
     }
 
-    // --- Colors ---
+    // --- Colors (Wolftac brand: ink panel, paper text, signal-green accent) ---
+    // Panel and text shades are derived from the live theme so the chrome
+    // stays coherent with any background/foreground, while the accent and
+    // alert colors are the fixed brand signals.
     const bg = self.app.config.background;
-    // Bar background: terminal bg + 20 brightness per channel (slightly lighter).
-    const bar_r: u8 = @min(@as(u16, bg.r) + 20, 255);
-    const bar_g: u8 = @min(@as(u16, bg.g) + 20, 255);
-    const bar_b: u8 = @min(@as(u16, bg.b) + 20, 255);
-    const bar_color = w32.RGB(bar_r, bar_g, bar_b);
+    const fg = self.app.config.foreground;
 
-    // Hover background: bar bg + 15 more (total +35 from terminal bg).
-    const hover_r: u8 = @min(@as(u16, bar_r) + 15, 255);
-    const hover_g: u8 = @min(@as(u16, bar_g) + 15, 255);
-    const hover_b: u8 = @min(@as(u16, bar_b) + 15, 255);
-    const hover_color = w32.RGB(hover_r, hover_g, hover_b);
-
-    // Active tab background: terminal bg (darker than bar).
+    // Bar = the terminal background lifted a hair toward the foreground:
+    // an "elevated panel" rather than a muddy brightened band.
+    const bar_color = w32.RGB(mix(bg.r, fg.r, 5), mix(bg.g, fg.g, 5), mix(bg.b, fg.b, 5));
+    // Hover: a slightly stronger lift.
+    const hover_color = w32.RGB(mix(bg.r, fg.r, 11), mix(bg.g, fg.g, 11), mix(bg.b, fg.b, 11));
+    // Active tab background = the terminal background, so the active tab
+    // reads as connected to the content below it.
     const active_bg_color = w32.RGB(bg.r, bg.g, bg.b);
 
-    // Accent line color (blue).
-    const accent_color = w32.RGB(0x3D, 0x8E, 0xF8);
+    // Active-tab accent: brand signal green.
+    const accent_color = w32.RGB(BRAND_ACCENT.r, BRAND_ACCENT.g, BRAND_ACCENT.b);
 
-    // Text colors.
-    const active_text_color = w32.RGB(230, 230, 230);
-    const inactive_text_color = w32.RGB(150, 150, 150);
+    // Text: paper-bright when active, muted (50% toward bg) when not.
+    const active_text_color = w32.RGB(fg.r, fg.g, fg.b);
+    const inactive_text_color = w32.RGB(mix(bg.r, fg.r, 48), mix(bg.g, fg.g, 48), mix(bg.b, fg.b, 48));
+
+    // Hairline separators / bottom rule: a faint paper line.
+    const hairline_color = w32.RGB(mix(bg.r, fg.r, 14), mix(bg.g, fg.g, 14), mix(bg.b, fg.b, 14));
 
     // Close button colors.
-    const close_normal_color = w32.RGB(150, 150, 150);
-    const close_hover_color = w32.RGB(232, 65, 65);
+    const close_normal_color = inactive_text_color;
+    const close_hover_color = w32.RGB(BRAND_ALERT.r, BRAND_ALERT.g, BRAND_ALERT.b);
 
     // --- Fill bar background ---
     var bar_rect = w32.RECT{ .left = 0, .top = 0, .right = client_w, .bottom = bar_h };
     const bar_brush = w32.CreateSolidBrush(bar_color) orelse return;
     _ = w32.FillRect(mem_dc, &bar_rect, bar_brush);
     _ = w32.DeleteObject(@ptrCast(bar_brush));
+
+    // Thin bottom rule separating the bar from the terminal. The active
+    // tab's green accent is drawn later and overlays this under that tab.
+    const hairline_px: i32 = @max(1, @as(i32, @intFromFloat(@round(self.scale))));
+    var rule_rect = w32.RECT{ .left = 0, .top = bar_h - hairline_px, .right = client_w, .bottom = bar_h };
+    if (w32.CreateSolidBrush(hairline_color)) |brush| {
+        _ = w32.FillRect(mem_dc, &rule_rect, brush);
+        _ = w32.DeleteObject(@ptrCast(brush));
+    }
 
     // --- Select font and set text mode ---
     var old_font: ?*anyopaque = null;
@@ -1107,6 +1145,23 @@ fn paintTabBar(self: *Window) void {
             .right = x + this_tab_w,
             .bottom = bar_h,
         };
+
+        // Subtle vertical separator at this tab's left edge. Skipped for
+        // the first tab and for edges touching the active tab (its distinct
+        // background already separates it).
+        if (i > 0 and !is_active and (i - 1) != self.active_tab) {
+            const inset: i32 = @intFromFloat(@round(9.0 * self.scale));
+            var sep_rect = w32.RECT{
+                .left = x,
+                .top = inset,
+                .right = x + hairline_px,
+                .bottom = bar_h - inset,
+            };
+            if (w32.CreateSolidBrush(hairline_color)) |brush| {
+                _ = w32.FillRect(mem_dc, &sep_rect, brush);
+                _ = w32.DeleteObject(@ptrCast(brush));
+            }
+        }
 
         // Draw tab background. CreateSolidBrush failures are rare (GDI
         // handle exhaustion) and must NOT skip the loop body's geometry
@@ -1207,7 +1262,7 @@ fn paintTabBar(self: *Window) void {
             }
         }
 
-        _ = w32.SetTextColor(mem_dc, inactive_text_color);
+        _ = w32.SetTextColor(mem_dc, if (self.hover_new_tab) accent_color else inactive_text_color);
         const plus_char = std.unicode.utf8ToUtf16LeStringLiteral("+");
         var plus_rect = w32.RECT{
             .left = btn_left,

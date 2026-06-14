@@ -1,0 +1,31 @@
+# Wolftac Digital — operator terminal theme for Spectre.
+# Ink-black canvas, paper text, signal-green accent.
+# "Build with precision. Operate with leverage."
+#
+# Install: copy this file to %LOCALAPPDATA%\ghostty\themes\Wolftac
+# then set `theme = Wolftac` in %LOCALAPPDATA%\spectre\config.
+# (Or paste these values directly into your config.)
+
+background = #050606
+foreground = #E8EAE9
+cursor-color = #8FF0BC
+cursor-text = #050606
+selection-background = #243029
+selection-foreground = #F6F7F2
+
+palette = 0=#0A0E10
+palette = 1=#E5484D
+palette = 2=#8FF0BC
+palette = 3=#E0B354
+palette = 4=#7FB0C9
+palette = 5=#B98BC9
+palette = 6=#6FD3C4
+palette = 7=#D3D7CF
+palette = 8=#4A5450
+palette = 9=#FF6B74
+palette = 10=#B6FFB7
+palette = 11=#F0C868
+palette = 12=#A8CFE0
+palette = 13=#D2A8E0
+palette = 14=#9AEFE0
+palette = 15=#F6F7F2
