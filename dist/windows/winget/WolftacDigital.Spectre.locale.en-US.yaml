@@ -1,6 +1,6 @@
 # DRAFT winget default-locale manifest.
 PackageIdentifier: WolftacDigital.Spectre
-PackageVersion: 0.1.1
+PackageVersion: 0.2.0
 PackageLocale: en-US
 Publisher: Wolftac Digital
 PackageName: Spectre

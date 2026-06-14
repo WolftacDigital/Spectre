@@ -2,7 +2,7 @@
 # requires the release asset URL to be publicly downloadable. Keep in
 # sync with package.ps1 output when publishing.
 PackageIdentifier: WolftacDigital.Spectre
-PackageVersion: 0.1.1
+PackageVersion: 0.2.0
 DefaultLocale: en-US
 ManifestType: version
 ManifestVersion: 1.6.0
