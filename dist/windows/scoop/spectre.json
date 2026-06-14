@@ -5,7 +5,7 @@
     "license": "MIT",
     "##": "Repo is public as of 2026-06-09; this manifest is live. Install: scoop install <path-or-raw-url-to-this-file>. Keep url + hash in sync with dist-out/spectre-<ver>-x64.zip.sha256 on each release.",
     "url": "https://github.com/WolftacDigital/Spectre/releases/download/v0.2.0/spectre-0.2.0-x64.zip",
-    "hash": "43F2C68D814960CCE4E5A6884242B00FCA70BE6354E5B3F4812153A753BCF274",
+    "hash": "4DE151D3CD503F85DA834C2748D3D95BD97C6F058D4D8BA0A31AA90D4B657079",
     "bin": "bin\\spectre.exe",
     "shortcuts": [
         [
