@@ -49,6 +49,9 @@ tab_rects: [64]w32.RECT = std.mem.zeroes([64]w32.RECT),
 /// Hit-test rectangle for the "+" (new tab) button.
 new_tab_rect: w32.RECT = .{ .left = 0, .top = 0, .right = 0, .bottom = 0 },
 
+/// Hit-test rectangle for the "?" (shortcuts / command palette) button.
+help_rect: w32.RECT = .{ .left = 0, .top = 0, .right = 0, .bottom = 0 },
+
 /// Index of the tab currently being hovered (-1 = none).
 hover_tab: isize = -1,
 
@@ -57,6 +60,9 @@ hover_close: bool = false,
 
 /// Whether the "+" (new tab) button is being hovered.
 hover_new_tab: bool = false,
+
+/// Whether the "?" (shortcuts) button is being hovered.
+hover_help: bool = false,
 
 /// Tab drag state: which tab is being dragged (-1 = none).
 drag_tab: isize = -1,
@@ -1111,12 +1117,13 @@ fn paintTabBar(self: *Window) void {
 
     // --- Calculate tab geometry ---
     const new_tab_btn_w: i32 = @intFromFloat(@round(36.0 * self.scale));
+    const help_btn_w: i32 = @intFromFloat(@round(34.0 * self.scale));
     const close_btn_w: i32 = @intFromFloat(@round(20.0 * self.scale));
     const text_pad: i32 = @intFromFloat(@round(10.0 * self.scale));
     const accent_h: i32 = @intFromFloat(@round(2.0 * self.scale));
 
     const tab_count_i32: i32 = @intCast(self.tab_count);
-    const available_w = client_w - new_tab_btn_w;
+    const available_w = client_w - new_tab_btn_w - help_btn_w;
 
     // Calculate each tab's width: proportional, min 60px.
     const min_tab_w: i32 = @intFromFloat(@round(60.0 * self.scale));
@@ -1280,6 +1287,38 @@ fn paintTabBar(self: *Window) void {
             &plus_rect,
             w32.DT_LEFT | w32.DT_VCENTER | w32.DT_SINGLELINE | w32.DT_NOPREFIX,
         );
+
+        // --- Draw shortcuts (?) button, right of the + button ---
+        const help_left = btn_right;
+        const help_right = help_left + help_btn_w;
+        self.help_rect = w32.RECT{
+            .left = help_left,
+            .top = 0,
+            .right = help_right,
+            .bottom = bar_h,
+        };
+        if (self.hover_help) {
+            var hb_rect = w32.RECT{ .left = help_left, .top = 0, .right = help_right, .bottom = bar_h };
+            if (w32.CreateSolidBrush(hover_color)) |brush| {
+                _ = w32.FillRect(mem_dc, &hb_rect, brush);
+                _ = w32.DeleteObject(@ptrCast(brush));
+            }
+        }
+        _ = w32.SetTextColor(mem_dc, if (self.hover_help) accent_color else inactive_text_color);
+        const help_char = std.unicode.utf8ToUtf16LeStringLiteral("?");
+        var help_text_rect = w32.RECT{
+            .left = help_left,
+            .top = 0,
+            .right = help_right,
+            .bottom = bar_h,
+        };
+        _ = w32.DrawTextW(
+            mem_dc,
+            help_char,
+            1,
+            &help_text_rect,
+            w32.DT_CENTER | w32.DT_VCENTER | w32.DT_SINGLELINE | w32.DT_NOPREFIX,
+        );
     }
 
     // --- BitBlt to screen ---
@@ -1353,6 +1392,17 @@ fn handleTabBarClick(self: *Window, x: i16, y: i16) void {
             log.err("failed to create new tab: {}", .{err});
             return;
         };
+        return;
+    }
+
+    // Check shortcuts (?) button — opens the command palette, which lists
+    // every command with its keyboard shortcut.
+    if (x >= self.help_rect.left and x < self.help_rect.right and
+        self.help_rect.right > self.help_rect.left)
+    {
+        if (self.getActiveSurface()) |surface| {
+            surface.setCommandPaletteActive(!surface.palette_active);
+        }
         return;
     }
 
@@ -1445,10 +1495,16 @@ fn handleTabBarMouseMove(self: *Window, x: i16, y: i16) void {
     var new_hover: isize = -1;
     var new_close = false;
     var new_new_tab = false;
+    var new_help = false;
 
     if (y < self.tabBarHeight()) {
-        // Check new-tab button.
-        if (x >= self.new_tab_rect.left and x < self.new_tab_rect.right) {
+        // Check shortcuts (?) button.
+        if (self.help_rect.right > self.help_rect.left and
+            x >= self.help_rect.left and x < self.help_rect.right)
+        {
+            new_help = true;
+        } else if (x >= self.new_tab_rect.left and x < self.new_tab_rect.right) {
+            // Check new-tab button.
             new_new_tab = true;
         } else {
             // Check tabs.
@@ -1466,10 +1522,13 @@ fn handleTabBarMouseMove(self: *Window, x: i16, y: i16) void {
         }
     }
 
-    if (new_hover != self.hover_tab or new_close != self.hover_close or new_new_tab != self.hover_new_tab) {
+    if (new_hover != self.hover_tab or new_close != self.hover_close or
+        new_new_tab != self.hover_new_tab or new_help != self.hover_help)
+    {
         self.hover_tab = new_hover;
         self.hover_close = new_close;
         self.hover_new_tab = new_new_tab;
+        self.hover_help = new_help;
         self.invalidateTabBar();
     }
 }
@@ -1559,10 +1618,11 @@ fn handleTabBarRightClick(self: *Window, x: i16, y: i16) void {
 /// Handle WM_MOUSELEAVE: reset all hover state and repaint.
 fn handleTabBarMouseLeave(self: *Window) void {
     self.tracking_mouse = false;
-    if (self.hover_tab != -1 or self.hover_new_tab) {
+    if (self.hover_tab != -1 or self.hover_new_tab or self.hover_help) {
         self.hover_tab = -1;
         self.hover_close = false;
         self.hover_new_tab = false;
+        self.hover_help = false;
         self.invalidateTabBar();
     }
 }
