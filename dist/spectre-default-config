@@ -49,3 +49,7 @@ window-show-tab-bar = always
 
 # Restore windows/tabs/working-dirs across restarts
 window-save-state = always
+
+# Highlight to copy; right-click to paste (Windows console feel)
+copy-on-select = clipboard
+right-click-action = paste
