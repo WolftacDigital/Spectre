@@ -2255,3 +2255,12 @@ fn msgWndProc(
 
     return w32.DefWindowProcW(hwnd, msg, wparam, lparam);
 }
+
+test {
+    // Keep the default-terminal handoff (issue #6) foundation in the test
+    // tree so it is compiled and exercised by `zig build test`. These
+    // modules are not yet wired into the running app (gated phases; see
+    // docs/DEFTERM.md).
+    _ = @import("defterm/com.zig");
+    _ = @import("defterm/server.zig");
+}
