@@ -56,9 +56,15 @@ if (Test-Path $fontSrc) {
         $ttf = Join-Path $fontSrc $f
         if (Test-Path $ttf) {
             $dst = Join-Path $fontDir $f
-            Copy-Item $ttf $dst -Force
-            [void][W.F]::AddFontResourceW($dst)
-            New-ItemProperty -Path $regKey -Name $names[$f] -Value $dst -PropertyType String -Force | Out-Null
+            # An already-installed font file is locked by the system; skip the
+            # copy in that case (the font is the same) rather than failing.
+            if (-not (Test-Path $dst)) {
+                try { Copy-Item $ttf $dst -Force -ErrorAction Stop } catch { }
+            }
+            if (Test-Path $dst) {
+                [void][W.F]::AddFontResourceW($dst)
+                New-ItemProperty -Path $regKey -Name $names[$f] -Value $dst -PropertyType String -Force | Out-Null
+            }
         }
     }
     "Installed brand fonts (IBM Plex Mono, Chakra Petch)."
